@@ -1,0 +1,67 @@
+import type { CategoryKey, Phase } from './types'
+
+/**
+ * Research-grade element dataset, part 2: Z = 60-118 (Nd → Og).
+ * Same 24-field pipe-delimited format as data1.ts.
+ */
+export const RAW2 = `
+60|Nd|Neodymium|144.24|lanthanide|0|6|6|9|[Xe] 4f4 6s2|2-8-18-22-8-2|1.14|5.525|50.0|185|1297|3347|7.01|+3|solid|1885|C. A. von Welsbach|-|Neo-dymium magnets (Nd2Fe14B) set the record for permanent-magnet energy product.
+61|Pm|Promethium|145|lanthanide|0|6|7|9|[Xe] 4f5 6s2|2-8-18-23-8-2|1.13|5.582|50.0|185|1315|3273|7.26|+3|solid|1945|J. Marinsky, L. Glendenin & C. Coryell|R|Only radioactive lanthanide; betavoltaic batteries and luminous paint historically.
+62|Sm|Samarium|150.36|lanthanide|0|6|8|9|[Xe] 4f6 6s2|2-8-18-24-8-2|1.17|5.644|50.0|185|1345|2067|7.52|+3, +2|solid|1879|P. Lecoq de Boisbaudran|-|SmCo magnets retain magnetization to 350 C; Sm-149 is a strong nuclear reactor poison.
+63|Eu|Europium|151.96|lanthanide|0|6|9|9|[Xe] 4f7 6s2|2-8-18-25-8-2|1.20|5.670|50.0|185|1099|1802|5.244|+3, +2|solid|1901|E. A. Demarcay|-|Red phosphor of screens and anti-counterfeit banknote fluorescence; sharpest known atomic resonance lines.
+64|Gd|Gadolinium|157.25|lanthanide|0|6|10|9|[Xe] 4f7 5d1 6s2|2-8-18-25-9-2|1.20|6.150|50.0|180|1585|3546|7.90|+3|solid|1880|J. C. G. de Marignac|-|Paramagnetic MRI contrast agent; highest thermal-neutron capture cross-section of any stable nuclide.
+65|Tb|Terbium|158.93|lanthanide|0|6|11|9|[Xe] 4f9 6s2|2-8-18-27-8-2|1.20|5.864|50.0|175|1629|3503|8.23|+3, +4|solid|1843|C. G. Mosander|-|Green phosphor in displays; Terfenol-D magnetostrictive alloy changes shape in magnetic fields.
+66|Dy|Dysprosium|162.50|lanthanide|0|6|12|9|[Xe] 4f10 6s2|2-8-18-28-8-2|1.22|5.939|50.0|175|1680|2840|8.54|+3|solid|1886|P. Lecoq de Boisbaudran|-|Keeps EV motor magnets magnetized at operating temperature; dysprosium lamellae in control rods.
+67|Ho|Holmium|164.93|lanthanide|0|6|13|9|[Xe] 4f11 6s2|2-8-18-29-8-2|1.23|6.022|50.0|175|1734|2993|8.79|+3|solid|1878|M. Delafontaine & P. T. Cleve|-|Strongest magnetic moment per atom of any element; Ho:YAG lasers cut through kidney stones.
+68|Er|Erbium|167.26|lanthanide|0|6|14|9|[Xe] 4f12 6s2|2-8-18-30-8-2|1.24|6.108|50.0|175|1802|3141|9.066|+3|solid|1843|C. G. Mosander|-|Er-doped fiber amplifiers carry nearly all transoceanic internet traffic at 1550 nm.
+69|Tm|Thulium|168.93|lanthanide|0|6|15|9|[Xe] 4f13 6s2|2-8-18-31-8-2|1.25|6.184|50.0|175|1818|2223|9.32|+3|solid|1879|P. T. Cleve|-|Rarest stable lanthanide; portable X-ray sources use Tm-170 emission.
+70|Yb|Ytterbium|173.05|lanthanide|0|6|16|9|[Xe] 4f14 6s2|2-8-18-32-8-2|1.10|6.254|50.0|175|1097|1469|6.90|+3, +2|solid|1878|J. C. G. de Marignac|-|Yb optical lattice clocks test relativity with 10^-18 precision.
+71|Lu|Lutetium|174.97|lanthanide|0|6|17|9|[Xe] 4f14 5d1 6s2|2-8-18-32-9-2|1.27|5.426|50.0|175|1925|3675|9.841|+3|solid|1907|G. Urbain|-|Hardest, densest lanthanide; LSO scintillator crystals detect PET photons.
+72|Hf|Hafnium|178.49|transition|4|6|4|6|[Xe] 4f14 5d2 6s2|2-8-18-32-10-2|1.30|6.825|0|155|2506|4876|13.31|+4|solid|1923|D. Coster & G. von Hevesy|-|Predicted by Bohr from quantum theory; neutron-absorbing control rods and high-k gate dielectrics.
+73|Ta|Tantalum|180.95|transition|5|6|5|6|[Xe] 4f14 5d3 6s2|2-8-18-32-11-2|1.50|7.550|31.0|145|3290|5731|16.69|+5|solid|1802|A. G. Ekeberg|-|Body-fluid inert capacitors inside every phone; corrosion-proof even to aqua regia.
+74|W|Tungsten|183.84|transition|6|6|6|6|[Xe] 4f14 5d4 6s2|2-8-18-32-12-2|2.36|7.864|78.6|135|3695|5828|19.25|+6, +4|solid|1783|J. J. & F. de Elhuyar|-|Highest melting point of all metals (3422 C); incandescent filaments and plasma-facing divertors.
+75|Re|Rhenium|186.21|transition|7|6|7|6|[Xe] 4f14 5d5 6s2|2-8-18-32-13-2|1.90|7.834|14.5|135|3459|5869|21.02|+7, +4|solid|1925|W. Noddack, I. Tacke & O. Berg|-|Last stable element discovered; single-crystal superalloy turbine blades contain several percent Re.
+76|Os|Osmium|190.23|transition|8|6|8|6|[Xe] 4f14 5d6 6s2|2-8-18-32-14-2|2.20|8.438|106.1|130|3306|5285|22.59|+8, +6, +4|solid|1803|S. Tennant|-|Densest naturally occurring element; tetroxide is dangerously volatile and toxic.
+77|Ir|Iridium|192.22|transition|9|6|9|6|[Xe] 4f14 5d7 6s2|2-8-18-32-15-2|2.20|8.967|151.0|135|2719|4403|22.56|+4, +3|solid|1803|S. Tennant|-|Most corrosion-resistant metal; the K-Pg impact clay layer is enriched in iridium worldwide.
+78|Pt|Platinum|195.08|transition|10|6|10|6|[Xe] 4f14 5d9 6s1|2-8-18-32-17-1|2.28|8.959|205.3|135|2041.4|4098|21.45|+4, +2|solid|1735|A. de Ulloa|-|Catalyst of modern chemistry; the kilogram was defined by a Pt-Ir artifact for 130 years.
+79|Au|Gold|196.97|transition|11|6|11|6|[Xe] 4f14 5d10 6s1|2-8-18-32-18-1|2.54|9.226|222.8|135|1337.33|3129|19.3|+3, +1|solid|?|Known since antiquity|-|Relativistic effects give gold its yellow color; a single gram stretches into 2 km of wire.
+80|Hg|Mercury|200.59|transition|12|6|12|6|[Xe] 4f14 5d10 6s2|2-8-18-32-18-2|2.00|10.438|?|150|234.32|629.88|13.534|+2, +1|liquid|?|Known since antiquity|-|Only metal liquid at room temperature; strong relativistic contraction of the 6s orbital.
+81|Tl|Thallium|204.38|post|13|6|13|6|[Xe] 4f14 5d10 6s2 6p1|2-8-18-32-18-3|1.62|6.108|19.2|190|577|1746|11.85|+1, +3|solid|1861|W. Crookes|-|Infamous as the poisoner's poison; Tl-doped NaI scintillators detect gamma rays.
+82|Pb|Lead|207.2|post|14|6|14|6|[Xe] 4f14 5d10 6s2 6p2|2-8-18-32-18-4|2.33|7.417|35.1|180|600.61|2022|11.34|+4, +2|solid|?|Known since antiquity|-|Dense radiation shield; inertness once plumbed Rome until toxicity became clear.
+83|Bi|Bismuth|208.98|post|15|6|15|6|[Xe] 4f14 5d10 6s2 6p3|2-8-18-32-18-5|2.02|7.286|91.2|160|544.7|1837|9.78|+5, +3|solid|1753|C. F. Geoffroy|-|Heaviest primordial element; Bi-209 alpha-decays with a half-life a billion times the universe's age.
+84|Po|Polonium|209|post|16|6|16|6|[Xe] 4f14 5d10 6s2 6p4|2-8-18-32-18-6|2.00|8.417|183.3|190|527|1235|9.196|+4, +2|solid|1898|P. & M. Curie|R|Intensely alpha-active; heats space-craft thermoelectric generators until neutron sources took over.
+85|At|Astatine|210|halogen|17|6|17|6|[Xe] 4f14 5d10 6s2 6p5|2-8-18-32-18-7|2.20|9.32|270.0|?|575|610|?|-1|solid|1940|D. Corson, K. MacKenzie & E. Segre|R|Rarest naturally occurring element; under 30 g exist in the crust at any moment.
+86|Rn|Radon|222|noble|18|6|18|6|[Xe] 4f14 5d10 6s2 6p6|2-8-18-32-18-8|2.20|10.749|?|120|202|211.3|0.00973|0, +2|gas|1899|F. E. Dorn|R|Radioactive soil gas and the second-leading cause of lung cancer after smoking.
+87|Fr|Francium|223|alkali|1|7|1|7|[Rn] 7s1|2-8-18-32-18-8-1|0.70|4.073|46.9|?|300|950|?|+1|solid|1939|M. Perey|R|Most unstable of the first 101 elements; fewer than 30 g exist on Earth at once.
+88|Ra|Radium|226|alkaline|2|7|2|7|[Rn] 7s2|2-8-18-32-18-8-2|0.90|5.279|9.6|215|973|2010|5.5|+2|solid|1898|P. & M. Curie|R|Glows faintly as it decays; once painted on watch dials with tragic consequences for dial painters.
+89|Ac|Actinium|227|actinide|0|7|3|10|[Rn] 6d1 7s2|2-8-18-32-18-9-2|1.10|5.38|33.8|195|1323|3471|10.0|+3|solid|1899|A. Debierne|-|Opens the 5f series; Ac-225 alpha therapy targets metastatic cancers.
+90|Th|Thorium|232.04|actinide|0|7|4|10|[Rn] 6d2 7s2|2-8-18-32-18-10-2|1.30|6.307|112.7|180|2115|5061|11.72|+4|solid|1829|J. J. Berzelius|R|Abundant fertile fuel for breeder reactors; Th-232 heads the longest decay chain.
+91|Pa|Protactinium|231.04|actinide|0|7|5|10|[Rn] 5f2 6d1 7s2|2-8-18-32-20-9-2|1.50|5.89|53.6|180|1841|4300|15.37|+5, +4|solid|1913|K. Fajans & O. Gohring|R|Scarce, expensive actinide used to trace ocean sediment chronology via Pa-231/Th-230 ratios.
+92|U|Uranium|238.03|actinide|0|7|6|10|[Rn] 5f3 6d1 7s2|2-8-18-32-21-9-2|1.38|6.194|50.9|175|1405.3|4404|19.1|+6, +4|solid|1789|M. H. Klaproth|R|Highest atomic number of primordial elements; U-235 fission sustains reactors and defined the atomic age.
+93|Np|Neptunium|237|actinide|0|7|7|10|[Rn] 5f4 6d1 7s2|2-8-18-32-22-9-2|1.36|6.266|45.9|175|917|4273|20.45|+5, +4|solid|1940|E. McMillan & P. H. Abelson|R|First transuranium element synthesized; accumulates in spent reactor fuel as Np-237.
+94|Pu|Plutonium|244|actinide|0|7|8|10|[Rn] 5f6 7s2|2-8-18-32-24-8-2|1.28|6.026|?|175|912.5|3501|19.85|+4, +3|solid|1940|G. T. Seaborg et al.|R|Six allotropic phases complicate metallurgy; Pu-238 heats RTG power sources on deep-space probes.
+95|Am|Americium|243|actinide|0|7|9|10|[Rn] 5f7 7s2|2-8-18-32-25-8-2|1.13|5.974|9.9|175|1449|2880|13.67|+3|solid|1944|G. T. Seaborg et al.|R|Am-241 alpha emission ionizes air inside virtually every household smoke detector.
+96|Cm|Curium|247|actinide|0|7|10|10|[Rn] 5f7 6d1 7s2|2-8-18-32-25-9-2|1.28|5.991|27.2|?|1613|3383|13.51|+3|solid|1944|G. T. Seaborg et al.|R|Alpha spectrometer calibration source; Cm-244 powered lunar soil analysis instruments.
+97|Bk|Berkelium|247|actinide|0|7|11|10|[Rn] 5f9 7s2|2-8-18-32-27-8-2|1.30|6.197|?|?|1259|2900|14.78|+3|solid|1949|G. T. Seaborg et al.|R|Named for Berkeley; Bk-249 targets synthesized element 117, tennessine.
+98|Cf|Californium|251|actinide|0|7|12|10|[Rn] 5f10 7s2|2-8-18-32-28-8-2|1.30|6.282|?|?|1173|1743|15.1|+3|solid|1950|G. T. Seaborg et al.|R|Spontaneous fission of Cf-252 makes compact neutron sources for well logging and reactor startup.
+99|Es|Einsteinium|252|actinide|0|7|13|10|[Rn] 5f11 7s2|2-8-18-32-29-8-2|1.30|6.368|?|?|1133|1269|8.84|+3|solid|1952|A. Ghiorso et al.|R|Discovered in H-bomb debris; its strong self-heating complicates X-ray crystallography.
+100|Fm|Fermium|257|actinide|0|7|14|10|[Rn] 5f12 7s2|2-8-18-32-30-8-2|1.30|6.50|?|?|1800|?|?|+3|solid|1952|A. Ghiorso et al.|R|Heaviest element obtainable by neutron capture; a research dead end for synthesis.
+101|Md|Mendelevium|258|actinide|0|7|15|10|[Rn] 5f13 7s2|2-8-18-32-31-8-2|1.30|6.58|?|?|1100|?|?|+3|solid|1955|A. Ghiorso et al.|R|First element made one atom at a time, by recoil-capture against a gold foil.
+102|No|Nobelium|259|actinide|0|7|16|10|[Rn] 5f14 7s2|2-8-18-32-32-8-2|1.30|6.63|?|?|1100|?|?|+3|solid|1958|A. Ghiorso et al.|R|No2+ chemistry unexpectedly resembles Ca2+ rather than heavier actinides.
+103|Lr|Lawrencium|266|actinide|0|7|17|10|[Rn] 5f14 7s2 7p1|2-8-18-32-32-8-3|1.30|4.96|?|?|1900|?|?|+3|solid|1961|A. Ghiorso et al.|R|Closes the 5f series with an anomalous p-electron ground state.
+104|Rf|Rutherfordium|267|transition|4|7|4|7|[Rn] 5f14 6d2 7s2|2-8-18-32-32-10-2|?|6.02|?|?|2400|5800|23.2|+4|solid|1964|JINR Dubna & LBNL Berkeley|R|First transactinide; gas-phase chemistry confirms Hf-like tetrachloride behavior.
+105|Db|Dubnium|268|transition|5|7|5|7|[Rn] 5f14 6d3 7s2|2-8-18-32-32-11-2|?|6.9|?|?|?|?|29.3|+5|solid|1967|JINR Dubna & LBNL Berkeley|R|Named after Dubna; aqueous chemistry mimics niobium and tantalum pentachlorides.
+106|Sg|Seaborgium|269|transition|6|7|6|7|[Rn] 5f14 6d4 7s2|2-8-18-32-32-12-2|?|8.9|?|?|?|?|35.0|+6|solid|1974|LBNL Berkeley|R|Only element named for a living person at the time; forms volatile SgO2Cl2 like tungsten.
+107|Bh|Bohrium|270|transition|7|7|7|7|[Rn] 5f14 6d5 7s2|2-8-18-32-32-13-2|?|7.7|?|?|?|?|37.1|+7|solid|1981|G. Munzenberg & P. Armbruster|R|Confirmed as a group-7 homolog via volatile Bh oxychloride chemistry.
+108|Hs|Hassium|277|transition|8|7|8|7|[Rn] 5f14 6d6 7s2|2-8-18-32-32-14-2|?|7.6|?|?|?|?|40.7|+8|solid|1984|GSI Darmstadt|R|HsO4 tetroxide volatility verified osmium-like chemistry in single-atom experiments.
+109|Mt|Meitnerium|278|unknown|9|7|9|7|[Rn] 5f14 6d7 7s2|2-8-18-32-32-15-2|?|?|?|?|?|?|37.4|?|solid|1982|GSI Darmstadt|R|Named for Lise Meitner; chemical properties remain unmeasured beyond a handful of atoms.
+110|Ds|Darmstadtium|281|unknown|10|7|10|7|[Rn] 5f14 6d8 7s2|2-8-18-32-32-16-2|?|?|?|?|?|?|34.8|?|solid|1994|GSI Darmstadt|R|Synthesized by Pb-208 + Ni-62 fusion; only single-atom half-life data exist.
+111|Rg|Roentgenium|282|unknown|11|7|11|7|[Rn] 5f14 6d9 7s2|2-8-18-32-32-17-2|?|?|?|?|?|?|28.7|?|solid|1994|GSI Darmstadt|R|Predicted to behave as an ultra-noble coinage metal with relativistic 7s stabilization.
+112|Cn|Copernicium|285|transition|12|7|12|7|[Rn] 5f14 6d10 7s2|2-8-18-32-32-18-2|?|11.97|?|?|283|340|23.7|+2|liquid|1996|GSI Darmstadt|R|Predicted to be a volatile liquid metal, influenced by extreme relativistic 7s inertness.
+113|Nh|Nihonium|286|post|13|7|13|7|[Rn] 5f14 6d10 7s2 7p1|2-8-18-32-32-18-3|?|7.306|?|?|700|1430|16.0|+1|solid|2004|RIKEN Japan|R|First element discovered in Asia; inert-pair effect makes +1 the stable oxidation state.
+114|Fl|Flerovium|289|post|14|7|14|7|[Rn] 5f14 6d10 7s2 7p2|2-8-18-32-32-18-4|?|8.539|?|?|200|380|11.4|+2|solid|1999|JINR Dubna|R|Sits at the predicted island of stability; may behave as an exotic semi-noble gas.
+115|Mc|Moscovium|290|post|15|7|15|7|[Rn] 5f14 6d10 7s2 7p3|2-8-18-32-32-18-5|?|5.58|?|?|700|1400|13.5|+1, +3|solid|2003|JINR Dubna & LBNL Berkeley|R|Decays through Nh within milliseconds; named for the Moscow region.
+116|Lv|Livermorium|293|post|16|7|16|7|[Rn] 5f14 6d10 7s2 7p4|2-8-18-32-32-18-6|?|7.59|?|?|709|1085|12.9|+2|solid|2000|JINR Dubna|R|Named for Livermore lab; alpha decays to flerovium isotopes.
+117|Ts|Tennessine|294|unknown|17|7|17|7|[Rn] 5f14 6d10 7s2 7p5|2-8-18-32-32-18-7|?|7.65|?|?|?|?|7.2|-1|solid|2010|JINR Dubna & ORNL|R|Second-heaviest element made; relativistic effects may break halogen chemistry rules.
+118|Og|Oganesson|294|unknown|18|7|18|7|[Rn] 5f14 6d10 7s2 7p6|2-8-18-32-32-18-8|?|8.87|?|?|325|450|5.0|0|solid|2002|JINR Dubna & LBNL Berkeley|R|Heaviest synthesized element; predicted to be a reactive, polarizable 'noble gas' solid.
+`
