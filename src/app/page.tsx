@@ -326,7 +326,8 @@ export default function Page() {
       <footer className="shrink-0 border-t border-white/[0.08] bg-[#090c12] px-4 py-1.5">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-0.5 font-mono text-[9.5px] text-zinc-600">
           <span>
-            Data: IUPAC 2021 masses · NIST ionization energies · CRC Handbook · Slater/Clementi radii
+            Data: IUPAC 2021 masses · NIST ionization energies · NuDat/ENSDF half-lives · CRC Handbook ·
+            Slater/Clementi radii
           </span>
           <span className="hidden md:inline">
             Superheavy (Z≥104) properties are predictions; — means no accepted value

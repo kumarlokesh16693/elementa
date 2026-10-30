@@ -15,6 +15,8 @@ import {
 } from '@/lib/periodic'
 import { Bohr2D } from './Bohr2D'
 import { Bohr3D } from './Bohr3D'
+import { Orbitals3D } from './Orbitals3D'
+import { IsotopeTable } from './IsotopeTable'
 import { TrendsChart, type TrendField } from './TrendsChart'
 
 interface DetailPanelProps {
@@ -26,6 +28,8 @@ const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'bohr2d', label: 'Bohr 2D' },
   { key: 'bohr3d', label: 'Bohr 3D' },
+  { key: 'orbitals', label: 'Orbitals' },
+  { key: 'isotopes', label: 'Isotopes' },
   { key: 'trends', label: 'Trends' },
 ] as const
 
@@ -165,7 +169,7 @@ export function DetailPanel({ element, onClose }: DetailPanelProps) {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-t-md px-3 py-1.5 text-xs font-medium transition ${
+            className={`rounded-t-md px-2.5 py-1.5 text-[11px] font-medium transition ${
               tab === t.key
                 ? 'border-b-2 border-amber-400 text-amber-300'
                 : 'border-b-2 border-transparent text-zinc-500 hover:text-zinc-300'
@@ -297,6 +301,14 @@ export function DetailPanel({ element, onClose }: DetailPanelProps) {
             </div>
           </div>
         )}
+
+        {tab === 'orbitals' && (
+          <div className="h-full min-h-[440px]">
+            <Orbitals3D autoRotate={autoRotate} />
+          </div>
+        )}
+
+        {tab === 'isotopes' && <IsotopeTable element={element} />}
 
         {tab === 'trends' && (
           <div className="h-full min-h-[380px]">
