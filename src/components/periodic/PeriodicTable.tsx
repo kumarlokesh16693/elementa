@@ -1,180 +1,167 @@
 'use client'
 
 import { memo } from 'react'
-import type { ElementData } from '@/lib/periodic/types'
-import { CATEGORY_MAP } from '@/lib/periodic/types'
-import { fmt, hexWithAlpha, isHeatMode, tileColor, usesBracketMass, ELEMENTS } from '@/lib/periodic'
+import type { CategoryKey, ColorMode, ElementData } from '@/lib/periodic/types'
+import { ELEMENTS, getElement, isHeatMode, tileColor } from '@/lib/periodic'
 
 interface PeriodicTableProps {
-  selectedZ: number | null
+  selected: number
   onSelect: (el: ElementData) => void
-  colorMode: string
-  isDimmed: (el: ElementData) => boolean
+  colorMode: ColorMode
+  /** element numbers that match the current search; null = no search active */
+  matches: Set<number> | null
+  /** category filter; null = all visible */
+  activeCategories: Set<CategoryKey> | null
+}
+
+function shortVal(v: number | null): string {
+  if (v == null) return '—'
+  const a = Math.abs(v)
+  if (a >= 1000) return String(Math.round(v))
+  if (a >= 100) return v.toFixed(0)
+  if (a >= 10) return v.toFixed(1)
+  if (a >= 0.01) return v.toFixed(2)
+  return v.toExponential(1)
 }
 
 interface TileProps {
   el: ElementData
-  colorMode: string
+  colorMode: ColorMode
+  dim: boolean
   selected: boolean
-  dimmed: boolean
   onSelect: (el: ElementData) => void
 }
 
-const Tile = memo(function Tile({ el, colorMode, selected, dimmed, onSelect }: TileProps) {
-  const tc = tileColor(el, colorMode)
-  const cat = CATEGORY_MAP[el.category]
-  const heat = isHeatMode(colorMode)
-  const value = heat
-    ? fmt(el[colorMode as keyof ElementData] as number | null, '', 2)
-    : usesBracketMass(el)
-      ? `[${Math.round(el.mass)}]`
-      : fmt(el.mass, '', 3)
-
+const Tile = memo(function Tile({ el, colorMode, dim, selected, onSelect }: TileProps) {
+  const c = tileColor(el, colorMode)
+  const sub = isHeatMode(colorMode) ? shortVal(el[colorMode]) : String(el.mass)
   return (
     <button
+      type="button"
       onClick={() => onSelect(el)}
-      title={`${el.name} (${el.symbol}) · Z=${el.number} · ${cat.label}`}
-      aria-label={`${el.name}, atomic number ${el.number}, ${cat.label}`}
-      className={`group relative flex h-full w-full flex-col justify-between rounded-[5px] border p-[3px] text-left transition-[transform,opacity,box-shadow] duration-150 hover:z-20 hover:scale-[1.18] focus-visible:z-20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-300 ${
-        dimmed ? 'opacity-[0.16] saturate-0' : 'opacity-100'
-      }`}
+      title={`${el.name} · ${el.mass} u · ${el.config}`}
       style={{
         gridColumn: el.xpos + 1,
         gridRow: el.ypos + 1,
-        background: tc.bg,
-        borderColor: selected ? cat.color : tc.border,
-        boxShadow: selected ? `0 0 0 1.5px ${cat.color}, 0 0 14px ${hexWithAlpha(cat.color, 0.5)}` : undefined,
-        zIndex: selected ? 15 : undefined,
+        background: c.bg,
+        borderColor: selected ? c.text : c.border,
+        color: c.text,
+        boxShadow: selected ? `0 0 0 1.5px ${c.text}, 0 0 12px ${c.border}` : undefined,
       }}
+      className={`group relative flex h-full w-full flex-col items-center justify-center rounded-[4px] border transition-[opacity,filter,transform] duration-150 hover:z-10 hover:scale-[1.12] hover:brightness-150 focus:outline-none ${
+        dim ? 'opacity-15 saturate-0' : ''
+      }`}
     >
-      <span className="flex w-full items-start justify-between leading-none">
-        <span className="font-mono text-[8px] text-zinc-400">{el.number}</span>
-        {el.radioactive && (
-          <span className="text-[7px] leading-none text-amber-400/90" aria-label="radioactive">
-            ☢
-          </span>
-        )}
+      <span className="absolute left-1 top-0.5 font-mono text-[8px] leading-none opacity-80">
+        {el.number}
       </span>
-      <span
-        className="text-center font-mono text-[15px] font-semibold leading-none tracking-tight"
-        style={{ color: tc.text }}
-      >
-        {el.symbol}
-      </span>
-      <span
-        className="hidden truncate text-center text-[6.5px] leading-[1.25] text-zinc-400 group-hover:block md:block"
-      >
-        {el.name}
-      </span>
-      <span className="truncate text-center font-mono text-[6.5px] leading-[1.25] text-zinc-500">
-        {value}
-      </span>
+      <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-current opacity-60 group-hover:opacity-100" style={{ display: el.radioactive ? 'block' : 'none' }} />
+      <span className="text-[15px] font-bold leading-none tracking-tight">{el.symbol}</span>
+      <span className="mt-0.5 font-mono text-[7.5px] leading-none opacity-75">{sub}</span>
     </button>
   )
 })
 
-const F_PLACEHOLDERS = [
-  { label: '57–71', sub: 'La–Lu', col: 4, row: 7 },
-  { label: '89–103', sub: 'Ac–Lr', col: 4, row: 8 },
-]
+const GROUP_LABELS = Array.from({ length: 18 }, (_, i) => i + 1)
 
-export function PeriodicTable({ selectedZ, onSelect, colorMode, isDimmed }: PeriodicTableProps) {
+function GhostSeries({
+  label,
+  col,
+  row,
+  target,
+  onSelect,
+}: {
+  label: string
+  col: number
+  row: number
+  target: number
+  onSelect: (el: ElementData) => void
+}) {
+  const el = getElement(target)
+  if (!el) return null
   return (
-    <div className="w-max min-w-full p-1">
+    <button
+      type="button"
+      onClick={() => onSelect(el)}
+      style={{ gridColumn: col, gridRow: row }}
+      title={`Jump to ${el.name} (${target})`}
+      className="flex h-full w-full flex-col items-center justify-center rounded-[4px] border border-dashed border-white/15 text-zinc-500 transition hover:border-white/40 hover:text-zinc-300"
+    >
+      <span className="font-mono text-[9px] leading-tight">{label}</span>
+      <span className="text-[7px] uppercase tracking-wider opacity-70">
+        {target === 57 ? 'La series' : 'Ac series'}
+      </span>
+    </button>
+  )
+}
+
+export default function PeriodicTable({
+  selected,
+  onSelect,
+  colorMode,
+  matches,
+  activeCategories,
+}: PeriodicTableProps) {
+  return (
+    <div className="w-max">
       <div
-        className="pt-grid"
+        className="pt-grid inline-grid"
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(19, var(--tile))',
-          gridTemplateRows: '18px repeat(7, var(--tile)) 10px repeat(2, var(--tile))',
+          gridTemplateColumns: '20px repeat(18, var(--tile))',
+          gridTemplateRows: '16px repeat(7, var(--tile)) 14px repeat(2, var(--tile))',
           gap: 'var(--tile-gap)',
         }}
       >
-        {/* group labels */}
-        {Array.from({ length: 18 }, (_, i) => (
+        {/* group header */}
+        <div />
+        {GROUP_LABELS.map((g) => (
           <div
-            key={`g-${i}`}
+            key={`g-${g}`}
             className="flex items-end justify-center pb-0.5 font-mono text-[8px] text-zinc-600"
-            style={{ gridColumn: i + 2, gridRow: 1 }}
           >
-            {i + 1}
+            {g}
           </div>
         ))}
 
         {/* period labels */}
-        {Array.from({ length: 7 }, (_, i) => (
+        {[1, 2, 3, 4, 5, 6, 7].map((p) => (
           <div
-            key={`p-${i}`}
-            className="flex items-center justify-end pr-1.5 font-mono text-[8px] text-zinc-600"
-            style={{ gridColumn: 1, gridRow: i + 2 }}
+            key={`p-${p}`}
+            style={{ gridRow: p + 1, gridColumn: 1 }}
+            className="flex items-center justify-end pr-1 font-mono text-[8px] text-zinc-600"
           >
-            {i + 1}
+            {p}
           </div>
         ))}
-        {/* f-block series labels */}
-        <div
-          className="flex items-center justify-end pr-1.5 font-mono text-[8px] text-fuchsia-400/60"
-          style={{ gridColumn: 1, gridRow: 10 }}
-        >
-          6f
-        </div>
-        <div
-          className="flex items-center justify-end pr-1.5 font-mono text-[8px] text-pink-400/60"
-          style={{ gridColumn: 1, gridRow: 11 }}
-        >
-          5f
-        </div>
-
-        {/* f-block insertion placeholders */}
-        {F_PLACEHOLDERS.map((p) => (
+        {['6*', '7*'].map((p, i) => (
           <div
-            key={p.label}
-            className="flex flex-col items-center justify-center rounded-[5px] border border-dashed border-white/15 text-[7px] leading-tight text-zinc-500"
-            style={{ gridColumn: p.col, gridRow: p.row }}
+            key={`pf-${p}`}
+            style={{ gridRow: 10 + i, gridColumn: 1 }}
+            className="flex items-center justify-end pr-1 font-mono text-[8px] text-zinc-600"
           >
-            <span className="font-mono">{p.label}</span>
-            <span className="text-[6px] text-zinc-600">{p.sub}</span>
+            {p}
           </div>
         ))}
 
-        {ELEMENTS.map((el) => (
-          <Tile
-            key={el.number}
-            el={el}
-            colorMode={colorMode}
-            selected={selectedZ === el.number}
-            dimmed={isDimmed(el)}
-            onSelect={onSelect}
-          />
-        ))}
-      </div>
+        {/* f-block pull-out markers in the main body */}
+        <GhostSeries label="57–71" col={4} row={7} target={57} onSelect={onSelect} />
+        <GhostSeries label="89–103" col={4} row={8} target={89} onSelect={onSelect} />
 
-      {/* block strip */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 font-mono text-[9px] text-zinc-600">
-        {(['s', 'p', 'd', 'f'] as const).map((b) => (
-          <span key={b} className="flex items-center gap-1.5">
-            <span
-              className="inline-block h-2 w-2 rounded-sm"
-              style={{ background: BLOCK_TINTS[b] }}
+        {ELEMENTS.map((el) => {
+          const dimSearch = matches != null && !matches.has(el.number)
+          const dimCat = activeCategories != null && !activeCategories.has(el.category)
+          return (
+            <Tile
+              key={el.number}
+              el={el}
+              colorMode={colorMode}
+              dim={dimSearch || dimCat}
+              selected={selected === el.number}
+              onSelect={onSelect}
             />
-            {b}-block · {BLOCK_LABELS[b]}
-          </span>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
-}
-
-const BLOCK_TINTS: Record<string, string> = {
-  s: 'rgba(251,113,133,0.5)',
-  p: 'rgba(74,222,128,0.5)',
-  d: 'rgba(34,211,238,0.5)',
-  f: 'rgba(232,121,249,0.5)',
-}
-
-const BLOCK_LABELS: Record<string, string> = {
-  s: 'groups 1-2',
-  p: 'groups 13-18',
-  d: 'groups 3-12',
-  f: 'inner series',
 }

@@ -123,17 +123,27 @@ function heatColor(t: number): string {
   return `rgb(${mix(a[0], b[0])}, ${mix(a[1], b[1])}, ${mix(a[2], b[2])})`
 }
 
-export function heatForField(el: ElementData, field: HeatField): string {
+/** Normalized 0-1 position of an element's value within the field's reference range (log for density) */
+export function heatT(el: ElementData, field: HeatField): number | null {
   const v = el[field]
-  if (v == null) return '#3f4652'
+  if (v == null) return null
   const [lo, hi] = HEAT_RANGES[field]
-  // density spans orders of magnitude -> use log scale
   const t =
     field === 'density'
       ? (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo))
       : (v - lo) / (hi - lo)
-  return heatColor(Number.isFinite(t) ? t : 0)
+  return Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : null
 }
+
+export function heatForField(el: ElementData, field: HeatField): string {
+  const t = heatT(el, field)
+  if (t == null) return '#3f4652'
+  return heatColor(t)
+}
+
+/** CSS gradient matching the 5-stop heat ramp, for legend bars */
+export const HEAT_GRADIENT_CSS =
+  'linear-gradient(90deg, rgb(38,70,83), rgb(42,157,143), rgb(233,196,106), rgb(244,162,97), rgb(231,111,81))'
 
 export function heatLegend(field: HeatField): { lo: number; hi: number; unit: string } {
   const [lo, hi] = HEAT_RANGES[field]
@@ -169,7 +179,12 @@ export function tileColor(el: ElementData, mode: string): TileColor {
 }
 
 export function hexWithAlpha(hex: string, alpha: number): string {
-  if (hex.startsWith('rgb')) return hex // already rgb(); used only for heat (alpha applied inline)
+  // heat colors arrive as rgb(r, g, b) — convert to rgba so tiles stay translucent
+  if (hex.startsWith('rgb')) {
+    const m = hex.match(/\d+(\.\d+)?/g)
+    if (m && m.length >= 3) return `rgba(${m[0]}, ${m[1]}, ${m[2]}, ${alpha})`
+    return hex
+  }
   const h = hex.replace('#', '')
   const r = parseInt(h.slice(0, 2), 16)
   const g = parseInt(h.slice(2, 4), 16)

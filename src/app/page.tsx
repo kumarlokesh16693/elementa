@@ -1,342 +1,253 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import dynamic from 'next/dynamic'
-import { Atom, Search, X } from 'lucide-react'
-import type { ElementData } from '@/lib/periodic/types'
-import { CATEGORIES, CATEGORY_MAP, COLOR_MODES, type CategoryKey, type ColorMode } from '@/lib/periodic/types'
+import { useMemo, useState } from 'react'
+import type { CategoryKey, ColorMode } from '@/lib/periodic/types'
+import { CATEGORIES, COLOR_MODES, BLOCK_COLORS, PHASE_COLORS } from '@/lib/periodic/types'
 import {
-  ELEMENT_MAP,
+  getElement,
   heatLegend,
-  isHeatMode,
   searchElements,
+  tileColor,
+  isHeatMode,
+  HEAT_GRADIENT_CSS,
 } from '@/lib/periodic'
-import { PeriodicTable } from '@/components/periodic/PeriodicTable'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import PeriodicTable from '@/components/periodic/PeriodicTable'
+import DetailPanel from '@/components/periodic/DetailPanel'
 
-const DetailPanel = dynamic(
-  () => import('@/components/periodic/DetailPanel').then((m) => m.DetailPanel),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full items-center justify-center bg-[#0c0f16]">
-        <span className="font-mono text-xs tracking-[0.3em] text-amber-500/80 animate-pulse">
-          LOADING MODELS…
-        </span>
-      </div>
-    ),
-  },
-)
-
-export default function Page() {
-  const [selectedZ, setSelectedZ] = useState<number | null>(6)
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [activeCats, setActiveCats] = useState<Set<CategoryKey>>(new Set())
+export default function Home() {
+  const [selectedZ, setSelectedZ] = useState(6) // Carbon
   const [colorMode, setColorMode] = useState<ColorMode>('category')
-  const searchRef = useRef<HTMLInputElement>(null)
-  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeCats, setActiveCats] = useState<Set<CategoryKey> | null>(null)
+  const [query, setQuery] = useState('')
+  const [focused, setFocused] = useState(false)
 
-  const matches = useMemo(() => searchElements(query), [query])
+  const selectedEl = getElement(selectedZ) ?? getElement(1)!
+  const accent = tileColor(selectedEl, colorMode).text
 
-  const selectElement = useCallback((el: ElementData) => {
-    setSelectedZ(el.number)
-    setPanelOpen(true)
-  }, [])
-
-  /* ---------- filtering ---------- */
-  const isDimmed = useCallback(
-    (el: ElementData) => {
-      if (activeCats.size > 0 && !activeCats.has(el.category)) return true
-      if (query.trim() && !matches.some((m) => m.number === el.number)) return true
-      return false
-    },
-    [activeCats, query, matches],
+  const results = useMemo(() => searchElements(query), [query])
+  const matches = useMemo(
+    () => (query.trim() ? new Set(results.map((e) => e.number)) : null),
+    [query, results],
   )
 
-  /* ---------- hotkeys ---------- */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const inInput =
-        e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-      if (e.key === '/' && !inInput) {
-        e.preventDefault()
-        searchRef.current?.focus()
-        return
-      }
-      if (e.key === 'Escape') {
-        if (showSuggestions) setShowSuggestions(false)
-        else if (inInput) (e.target as HTMLInputElement).blur()
-        else if (panelOpen) setPanelOpen(false)
-        return
-      }
-      if (inInput || !selectedZ) return
-      const dirs: Record<string, [number, number]> = {
-        ArrowLeft: [-1, 0],
-        ArrowRight: [1, 0],
-        ArrowUp: [0, -1],
-        ArrowDown: [0, 1],
-      }
-      const d = dirs[e.key]
-      if (!d) return
-      e.preventDefault()
-      const cur = ELEMENT_MAP.get(selectedZ)
-      if (!cur) return
-      const [dx, dy] = d
-      // immediate neighbor, then scan across empty spacer rows (main <-> f-block)
-      for (let k = 1; k <= 4; k++) {
-        const target = [...ELEMENT_MAP.values()].find(
-          (o) => o.xpos === cur.xpos + dx * k && o.ypos === cur.ypos + dy * k,
-        )
-        if (target) {
-          setSelectedZ(target.number)
-          return
-        }
-        if (dx !== 0) break // horizontal moves don't need gap scanning
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [selectedZ, panelOpen, showSuggestions])
+  const select = (z: number) => setSelectedZ(z)
 
-  const toggleCat = (key: CategoryKey) =>
+  const toggleCat = (k: CategoryKey) => {
     setActiveCats((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
+      const next = new Set(prev ?? [])
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next.size ? next : null
     })
+  }
 
-  const selected = selectedZ != null ? ELEMENT_MAP.get(selectedZ) : null
-  const heat = isHeatMode(colorMode)
-  const legend = heat ? heatLegend(colorMode) : null
-
-  const fmtSci = (v: number) => (v < 0.01 ? v.toExponential(1) : String(Math.round(v * 100) / 100))
+  const hasFilters = activeCats != null || query.trim().length > 0
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[#070a10] text-zinc-200">
-      {/* ============ header ============ */}
-      <header className="shrink-0 border-b border-white/[0.08] bg-[#090c12]/95 backdrop-blur">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/10">
-              <Atom className="h-5 w-5 text-amber-400" />
+    <div className="flex h-dvh flex-col bg-[#070a10]">
+      {/* header */}
+      <header className="relative z-20 flex h-14 shrink-0 items-center gap-4 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-[17px] font-bold tracking-[0.22em] text-zinc-100">
+            ELEM<span className="text-amber-400">E</span>NTA
+          </h1>
+          <span className="hidden font-mono text-[10px] text-zinc-500 md:inline">
+            research-grade periodic table · 118 elements · 2D/3D Bohr
+          </span>
+        </div>
+
+        {/* search */}
+        <div className="relative ml-auto w-56 lg:w-72">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 120)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setQuery('')
+              if (e.key === 'Enter' && results.length > 0) {
+                select(results[0].number)
+                setQuery('')
+              }
+            }}
+            placeholder="Search name, symbol, atomic number…"
+            className="w-full rounded-md border border-white/10 bg-[#0c1220] px-3 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none"
+          />
+          {focused && query.trim() && results.length > 0 && (
+            <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg border border-white/10 bg-[#0c1220] shadow-2xl">
+              {results.map((el) => {
+                const c = tileColor(el, 'category')
+                return (
+                  <button
+                    key={el.number}
+                    type="button"
+                    onMouseDown={() => {
+                      select(el.number)
+                      setQuery('')
+                    }}
+                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition hover:bg-white/5"
+                  >
+                    <span
+                      className="w-9 text-center font-mono text-[12px] font-bold"
+                      style={{ color: c.text }}
+                    >
+                      {el.symbol}
+                    </span>
+                    <span className="truncate text-[12px] text-zinc-200">{el.name}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[10px] text-zinc-500">
+                      {el.number} · {el.mass}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            <div className="leading-tight">
-              <div className="font-mono text-[15px] font-bold tracking-[0.22em] text-zinc-100">
-                ELEMENTA
-              </div>
-              <div className="font-mono text-[8.5px] uppercase tracking-[0.3em] text-zinc-500">
-                Research periodic table
-              </div>
-            </div>
-          </div>
-
-          {/* search */}
-          <div className="relative w-full max-w-[280px]">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value)
-                setShowSuggestions(true)
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && matches.length > 0) {
-                  selectElement(matches[0])
-                  setQuery('')
-                  ;(e.target as HTMLInputElement).blur()
-                }
-              }}
-              placeholder="Search element, symbol, Z …  ( / )"
-              aria-label="Search elements"
-              className="h-9 w-full rounded-lg border border-white/10 bg-white/[0.04] pl-8 pr-8 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500/50 focus:outline-none"
-            />
-            {query && (
-              <button
-                onClick={() => setQuery('')}
-                aria-label="Clear search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {showSuggestions && query.trim() && matches.length > 0 && (
-              <ul className="absolute left-0 right-0 top-11 z-40 max-h-72 overflow-y-auto rounded-lg border border-white/10 bg-[#10141d] py-1 shadow-2xl">
-                {matches.map((el) => {
-                  const c = CATEGORY_MAP[el.category].color
-                  return (
-                    <li key={el.number}>
-                      <button
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          selectElement(el)
-                          setQuery('')
-                        }}
-                        className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-white/[0.05]"
-                      >
-                        <span
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded border font-mono text-[10px] font-semibold"
-                          style={{ color: c, borderColor: `${c}55`, background: `${c}14` }}
-                        >
-                          {el.symbol}
-                        </span>
-                        <span className="text-xs text-zinc-200">{el.name}</span>
-                        <span className="ml-auto font-mono text-[10px] text-zinc-500">
-                          Z={el.number}
-                        </span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* color mode */}
-          <div className="flex items-center gap-2">
-            <span className="hidden font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-600 sm:block">
-              Color by
-            </span>
-            <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
-              <SelectTrigger className="h-9 w-[170px] border-white/10 bg-white/[0.04] font-mono text-xs text-zinc-200">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="border-white/10 bg-[#10141d] font-mono text-xs">
-                {COLOR_MODES.map((m) => (
-                  <SelectItem key={m.key} value={m.key} className="text-zinc-300">
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* heat legend */}
-          {legend && (
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[9px] text-zinc-500">
-                {fmtSci(legend.lo)} {legend.unit}
-              </span>
-              <span
-                className="h-2 w-28 rounded-full sm:w-40"
-                style={{
-                  background:
-                    'linear-gradient(90deg, rgb(38,70,83), rgb(42,157,143), rgb(233,196,106), rgb(244,162,97), rgb(231,111,81))',
-                }}
-              />
-              <span className="font-mono text-[9px] text-zinc-500">
-                {fmtSci(legend.hi)} {legend.unit}
-              </span>
+          )}
+          {focused && query.trim() && results.length === 0 && (
+            <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-lg border border-white/10 bg-[#0c1220] px-3 py-2 text-[11px] text-zinc-500 shadow-2xl">
+              No element matches “{query}”.
             </div>
           )}
         </div>
 
-        {/* category filter chips */}
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.05] px-4 py-1.5">
-          <button
-            onClick={() => setActiveCats(new Set())}
-            className={`rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition ${
-              activeCats.size === 0
-                ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
-                : 'border-white/10 bg-white/[0.03] text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            All 118
-          </button>
-          {CATEGORIES.map((c) => {
-            const active = activeCats.has(c.key)
-            return (
-              <button
-                key={c.key}
-                onClick={() => toggleCat(c.key)}
-                title={c.desc}
-                aria-pressed={active}
-                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
-                  active ? 'text-zinc-50' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-                style={{
-                  borderColor: active ? c.color : 'rgba(255,255,255,0.1)',
-                  background: active ? `${c.color}22` : 'rgba(255,255,255,0.03)',
-                }}
-              >
-                <span
-                  className="inline-block h-1.5 w-1.5 rounded-full"
-                  style={{ background: c.color }}
-                />
-                {c.label}
-              </button>
-            )
-          })}
-        </div>
+        {/* color mode */}
+        <select
+          value={colorMode}
+          onChange={(e) => setColorMode(e.target.value as ColorMode)}
+          className="rounded-md border border-white/10 bg-[#0c1220] px-2 py-1.5 text-[11px] text-zinc-300 focus:outline-none"
+          aria-label="Color mode"
+        >
+          {COLOR_MODES.map((m) => (
+            <option key={m.key} value={m.key}>
+              {m.label}
+            </option>
+          ))}
+        </select>
       </header>
 
-      {/* ============ main ============ */}
-      <main className="flex min-h-0 flex-1">
-        <section
-          aria-label="Periodic table"
-          className="min-w-0 flex-1 overflow-auto p-3 md:p-5"
-        >
-          <PeriodicTable
-            selectedZ={selectedZ}
-            onSelect={selectElement}
-            colorMode={colorMode}
-            isDimmed={isDimmed}
-          />
-        </section>
-
-        {/* desktop panel */}
-        {selected && panelOpen && (
-          <aside className="hidden w-[420px] shrink-0 border-l border-white/[0.08] lg:block xl:w-[460px]">
-            <DetailPanel element={selected} onClose={() => setPanelOpen(false)} />
-          </aside>
-        )}
-        {selected && !panelOpen && (
-          <aside className="hidden w-[52px] shrink-0 border-l border-white/[0.08] lg:block">
-            <button
-              onClick={() => setPanelOpen(true)}
-              className="flex h-full w-full flex-col items-center gap-3 pt-4 text-zinc-500 hover:text-amber-300"
-              aria-label="Open detail panel"
-            >
-              <span className="font-mono text-sm font-bold" style={{ writingMode: 'vertical-rl' }}>
-                {selected.symbol} · {selected.name}
+      {/* legend bar */}
+      <div className="z-10 flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4">
+        {isHeatMode(colorMode) ? (
+          <>
+            <span className="shrink-0 text-[10px] uppercase tracking-wider text-zinc-500">
+              {heatLegend(colorMode).unit}
+            </span>
+            <span className="shrink-0 font-mono text-[10px] text-zinc-400">
+              {heatLegend(colorMode).lo}
+            </span>
+            <div className="h-2 w-48 shrink-0 rounded-full md:w-72" style={{ background: HEAT_GRADIENT_CSS }} />
+            <span className="shrink-0 font-mono text-[10px] text-zinc-400">
+              {heatLegend(colorMode).hi} {heatLegend(colorMode).unit}
+            </span>
+            <span className="shrink-0 text-[10px] text-zinc-600">
+              · grey = no consensus value{colorMode === 'density' ? ' · logarithmic scale' : ''}
+            </span>
+          </>
+        ) : colorMode === 'block' ? (
+          <>
+            {Object.entries(BLOCK_COLORS).map(([k, c]) => (
+              <span
+                key={k}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px]"
+                style={{ color: c }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+                {k}-block
               </span>
-            </button>
-          </aside>
+            ))}
+            <span className="shrink-0 text-[10px] text-zinc-600">· highest-energy occupied orbital</span>
+          </>
+        ) : colorMode === 'phase' ? (
+          <>
+            {Object.entries(PHASE_COLORS).map(([k, c]) => (
+              <span
+                key={k}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] capitalize"
+                style={{ color: c }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
+                {k}
+              </span>
+            ))}
+            <span className="shrink-0 text-[10px] text-zinc-600">· predicted phase for heaviest elements</span>
+          </>
+        ) : (
+          <>
+            {CATEGORIES.map((cat) => {
+              const active = activeCats == null || activeCats.has(cat.key)
+              return (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => toggleCat(cat.key)}
+                  title={cat.desc}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                    active ? 'border-white/20 bg-white/[0.05]' : 'border-transparent opacity-35'
+                  }`}
+                  style={{ color: active ? cat.color : undefined }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
+                  {cat.label}
+                </button>
+              )
+            })}
+            {activeCats != null && (
+              <button
+                type="button"
+                onClick={() => setActiveCats(null)}
+                className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400 transition hover:text-zinc-200"
+              >
+                clear ×
+              </button>
+            )}
+          </>
         )}
-      </main>
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCats(null)
+              setQuery('')
+            }}
+            className="ml-auto shrink-0 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300 transition hover:bg-amber-400/20"
+          >
+            reset filters
+          </button>
+        )}
+      </div>
 
-      {/* mobile overlay panel */}
-      {selected && panelOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setPanelOpen(false)}
-          />
-          <div className="absolute inset-x-0 bottom-0 top-10 overflow-hidden rounded-t-2xl border-t border-white/10 shadow-2xl">
-            <DetailPanel element={selected} onClose={() => setPanelOpen(false)} />
+      {/* main */}
+      <main className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div
+          className="flex flex-1 justify-center overflow-auto p-4 lg:p-6"
+          style={{
+            background:
+              'radial-gradient(1100px 520px at 50% -8%, rgba(251,191,36,0.05), transparent 70%)',
+          }}
+        >
+          <div className="flex flex-col items-center">
+            <PeriodicTable
+              selected={selectedZ}
+              onSelect={(el) => select(el.number)}
+              colorMode={colorMode}
+              matches={matches}
+              activeCategories={activeCats}
+            />
+            <p className="mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600">
+              Reference values follow IUPAC conventions — Pauling electronegativity, first ionization
+              energy in eV, electron affinity in kJ/mol, empirical radii in pm (calculated for noble
+              gases), temperatures in K, densities at STP. Bracketed standard atomic weights apply to
+              Tc, Pm and Z ≥ 84. A dash (—) marks properties with no accepted experimental value.
+              Radioactive nuclides are flagged with a dot; Bohr shells are a pedagogical
+              approximation, not a quantum-mechanical orbital picture.
+            </p>
           </div>
         </div>
-      )}
 
-      {/* ============ footer ============ */}
-      <footer className="shrink-0 border-t border-white/[0.08] bg-[#090c12] px-4 py-1.5">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-0.5 font-mono text-[9.5px] text-zinc-600">
-          <span>
-            Data: IUPAC 2021 masses · NIST ionization energies · NuDat/ENSDF half-lives · CRC Handbook ·
-            Slater/Clementi radii
-          </span>
-          <span className="hidden md:inline">
-            Superheavy (Z≥104) properties are predictions; — means no accepted value
-          </span>
-          <span className="ml-auto hidden sm:inline">
-            ← ↑ → ↓ navigate · / search · Esc close
-          </span>
-        </div>
-      </footer>
+        <aside className="w-full shrink-0 border-t border-white/10 bg-[#0a0f18] lg:h-full lg:w-[384px] lg:overflow-y-auto lg:border-l lg:border-t-0">
+          <DetailPanel element={selectedEl} accent={accent} />
+        </aside>
+      </main>
     </div>
   )
 }

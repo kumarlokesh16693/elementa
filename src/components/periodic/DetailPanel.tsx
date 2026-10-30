@@ -1,321 +1,310 @@
 'use client'
 
-import { useState } from 'react'
-import { Pause, Play, RotateCcw, X } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import type { ElementData } from '@/lib/periodic/types'
 import { CATEGORY_MAP, SHELL_LETTERS } from '@/lib/periodic/types'
 import {
-  blockOf,
   configToSuperscript,
   fmt,
+  heatForField,
+  heatT,
+  hexWithAlpha,
   kelvinToC,
-  neutronCount,
   usesBracketMass,
   valenceOf,
 } from '@/lib/periodic'
 import { Bohr2D } from './Bohr2D'
-import { Bohr3D } from './Bohr3D'
-import { Orbitals3D } from './Orbitals3D'
-import { IsotopeTable } from './IsotopeTable'
-import { TrendsChart, type TrendField } from './TrendsChart'
+import Bohr3D from './Bohr3D'
 
 interface DetailPanelProps {
   element: ElementData
-  onClose: () => void
+  accent: string
 }
 
-const TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'bohr2d', label: 'Bohr 2D' },
-  { key: 'bohr3d', label: 'Bohr 3D' },
-  { key: 'orbitals', label: 'Orbitals' },
-  { key: 'isotopes', label: 'Isotopes' },
-  { key: 'trends', label: 'Trends' },
-] as const
+function shortVal(v: number | null): string {
+  if (v == null) return '—'
+  const a = Math.abs(v)
+  if (a >= 1000) return String(Math.round(v))
+  if (a >= 100) return v.toFixed(0)
+  if (a >= 10) return v.toFixed(1)
+  if (a >= 0.01) return v.toFixed(2)
+  return v.toExponential(1)
+}
 
-type TabKey = (typeof TABS)[number]['key']
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Chip({ children, tint }: { children: ReactNode; tint?: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2">
-      <div className="text-[9.5px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-        {label}
-      </div>
-      <div className="mt-0.5 font-mono text-[13px] text-zinc-100">{value}</div>
-      {sub && <div className="font-mono text-[10px] text-zinc-500">{sub}</div>}
-    </div>
+    <span
+      className="rounded-full border px-1.5 py-0.5 text-[9.5px] leading-none"
+      style={
+        tint
+          ? { color: tint, borderColor: hexWithAlpha(tint, 0.4), background: hexWithAlpha(tint, 0.1) }
+          : undefined
+      }
+    >
+      {children}
+    </span>
   )
 }
 
-function ModelControls({
-  playing,
-  speed,
-  onToggle,
-  onSpeed,
-  extra,
+function Section({
+  title,
+  accent,
+  children,
 }: {
-  playing: boolean
-  speed: number
-  onToggle: () => void
-  onSpeed: (v: number) => void
-  extra?: React.ReactNode
+  title: string
+  accent: string
+  children: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <button
-        onClick={onToggle}
-        aria-label={playing ? 'Pause animation' : 'Play animation'}
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 transition hover:bg-amber-500/20"
-      >
-        {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-      </button>
-      <label className="flex flex-1 min-w-[140px] items-center gap-2 text-[10px] uppercase tracking-widest text-zinc-500">
-        Speed
-        <input
-          type="range"
-          min={0.2}
-          max={3}
-          step={0.1}
-          value={speed}
-          onChange={(e) => onSpeed(parseFloat(e.target.value))}
-          className="h-1 flex-1 cursor-pointer appearance-none rounded bg-white/15 accent-amber-400"
-          aria-label="Animation speed"
-        />
-        <span className="w-8 text-right font-mono text-[10px] text-zinc-400">
-          {speed.toFixed(1)}×
-        </span>
-      </label>
-      {extra}
+    <section className="space-y-2">
+      <h3 className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+        <span className="inline-block h-3 w-[3px] rounded-full" style={{ background: accent }} />
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+function Prop({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-zinc-500">{label}</div>
+      <div className="mt-0.5 font-mono text-[12px] leading-tight text-zinc-200">{value}</div>
     </div>
   )
 }
 
-export function DetailPanel({ element, onClose }: DetailPanelProps) {
-  const [tab, setTab] = useState<TabKey>('overview')
-  const [playing, setPlaying] = useState(true)
-  const [speed, setSpeed] = useState(1)
-  const [showLabels, setShowLabels] = useState(true)
-  const [autoRotate, setAutoRotate] = useState(true)
-  const [resetKey, setResetKey] = useState(0)
-  const [trendField, setTrendField] = useState<TrendField>('ionizationEnergy')
+type TrendField =
+  | 'electronegativity'
+  | 'ionizationEnergy'
+  | 'atomicRadius'
+  | 'density'
+  | 'meltingPoint'
 
-  const cat = CATEGORY_MAP[element.category]
-  const block = blockOf(element)
-  const massStr = usesBracketMass(element) ? `[${Math.round(element.mass)}]` : fmt(element.mass, 'u', 3)
-  const mpC = kelvinToC(element.meltingPoint)
-  const bpC = kelvinToC(element.boilingPoint)
+const TRENDS: { field: TrendField; label: string; unit: string }[] = [
+  { field: 'electronegativity', label: 'Electronegativity', unit: '' },
+  { field: 'ionizationEnergy', label: 'Ionization E₁', unit: ' eV' },
+  { field: 'atomicRadius', label: 'Atomic radius', unit: ' pm' },
+  { field: 'density', label: 'Density (log)', unit: ' g/cm³' },
+  { field: 'meltingPoint', label: 'Melting point', unit: ' K' },
+]
+
+const SHELL_MAX = 32
+
+export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
+  const [model, setModel] = useState<'2d' | '3d'>('2d')
+  const [paused, setPaused] = useState(false)
+  const [speed, setSpeed] = useState(1)
+
+  const bracket = usesBracketMass(el)
+  const cat = CATEGORY_MAP[el.category]
 
   return (
-    <div className="flex h-full flex-col bg-[#0c0f16]">
-      {/* header */}
-      <div className="relative shrink-0 overflow-hidden border-b border-white/[0.08] px-5 pb-4 pt-4">
+    <div className="space-y-5 p-4">
+      {/* identity */}
+      <div className="flex items-center gap-3">
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.14]"
-          style={{ background: `radial-gradient(120% 90% at 85% -10%, ${cat.color}, transparent 60%)` }}
-        />
-        <button
-          onClick={onClose}
-          aria-label="Close detail panel"
-          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
+          className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border"
+          style={{ background: hexWithAlpha(accent, 0.12), borderColor: hexWithAlpha(accent, 0.5) }}
         >
-          <X className="h-4 w-4" />
-        </button>
-
-        <div className="relative flex items-center gap-4">
-          <div
-            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl border font-mono"
-            style={{
-              borderColor: cat.color,
-              background: `${cat.color}1f`,
-              boxShadow: `0 0 24px ${cat.color}33`,
-            }}
-          >
-            <span className="text-2xl font-semibold" style={{ color: cat.color }}>
-              {element.symbol}
-            </span>
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2">
-              <h2 className="truncate text-xl font-semibold text-zinc-50">{element.name}</h2>
-              <span className="font-mono text-sm text-zinc-500">Z = {element.number}</span>
-            </div>
-            <div className="mt-0.5 font-mono text-xs text-zinc-400">{massStr}</div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span
-                className="rounded-full border px-2 py-0.5 text-[10px] font-medium"
-                style={{ color: cat.color, borderColor: `${cat.color}55`, background: `${cat.color}14` }}
-              >
-                {cat.label}
-              </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] capitalize text-zinc-300">
-                {element.phase} · STP
-              </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase text-zinc-300">
-                {block}-block
-              </span>
-              {element.radioactive && (
-                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
-                  ☢ Radioactive
-                </span>
-              )}
-            </div>
+          <span className="font-mono text-[9px] leading-none opacity-75" style={{ color: accent }}>
+            {el.number}
+          </span>
+          <span className="text-xl font-bold leading-tight" style={{ color: accent }}>
+            {el.symbol}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-lg font-semibold text-zinc-100">{el.name}</div>
+          <div className="font-mono text-[11px] text-zinc-500">
+            {cat.label} · {el.mass} u{bracket ? ' †' : ''}
           </div>
         </div>
       </div>
 
-      {/* tabs */}
-      <div className="flex shrink-0 gap-1 border-b border-white/[0.08] px-3 pt-2">
-        {TABS.map((t) => (
+      <div className="flex flex-wrap gap-1.5">
+        <Chip tint={cat.color}>{cat.label}</Chip>
+        <Chip>phase: {el.phase}</Chip>
+        <Chip>group {el.group > 0 ? el.group : '—'}</Chip>
+        <Chip>period {el.period}</Chip>
+        {el.radioactive && <Chip tint="#fbbf24">☢ radioactive</Chip>}
+        {bracket && <Chip tint="#94a3b8">† bracketed mass</Chip>}
+      </div>
+
+      {/* Bohr model viewer */}
+      <Section title="Atomic model" accent={accent}>
+        <div className="relative h-[280px] overflow-hidden rounded-lg border border-white/10 bg-[#060a12] xl:h-[320px]">
+          {model === '2d' ? (
+            <Bohr2D element={el} accent={accent} speed={speed} animated={!paused} />
+          ) : (
+            <Bohr3D element={el} accent={accent} speed={speed} paused={paused} />
+          )}
+          <div className="absolute right-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
+            {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit'}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex overflow-hidden rounded-md border border-white/10">
+            {(['2d', '3d'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModel(m)}
+                className={`px-2.5 py-1 text-[11px] uppercase tracking-wide transition ${
+                  model === m
+                    ? 'bg-white/10 text-zinc-100'
+                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`rounded-t-md px-2.5 py-1.5 text-[11px] font-medium transition ${
-              tab === t.key
-                ? 'border-b-2 border-amber-400 text-amber-300'
-                : 'border-b-2 border-transparent text-zinc-500 hover:text-zinc-300'
-            }`}
+            type="button"
+            onClick={() => setPaused((p) => !p)}
+            className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"
           >
-            {t.label}
+            {paused ? '▶ Play' : '❚❚ Pause'}
           </button>
-        ))}
-      </div>
-
-      {/* content */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-3">
-        {tab === 'overview' && (
-          <div className="space-y-4">
-            <p className="text-[13px] leading-relaxed text-zinc-300">{element.summary}</p>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Stat
-                label="Electron configuration"
-                value={configToSuperscript(element.config)}
-              />
-              <Stat
-                label={`Shells (${SHELL_LETTERS.slice(0, element.shells.length).join(' ')})`}
-                value={element.shells.join(' · ')}
-                sub={`valence: ${valenceOf(element)} e⁻`}
-              />
-              <Stat label="Neutrons (≈)" value={String(neutronCount(element))} sub="most stable isotope" />
-              <Stat label="Electronegativity" value={fmt(element.electronegativity, '', 2)} sub="Pauling" />
-              <Stat label="1st ionization energy" value={fmt(element.ionizationEnergy, 'eV', 3)} />
-              <Stat label="Electron affinity" value={fmt(element.electronAffinity, 'kJ/mol', 1)} />
-              <Stat label="Atomic radius" value={fmt(element.atomicRadius, 'pm', 0)} sub="empirical (calc: H, ng)" />
-              <Stat label="Density (STP)" value={fmt(element.density, 'g/cm³', 3)} />
-              <Stat
-                label="Melting point"
-                value={fmt(element.meltingPoint, 'K', 1)}
-                sub={mpC != null ? `${fmt(mpC, '°C', 0)}` : undefined}
-              />
-              <Stat
-                label="Boiling point"
-                value={fmt(element.boilingPoint, 'K', 1)}
-                sub={bpC != null ? `${fmt(bpC, '°C', 0)}` : undefined}
-              />
-              <Stat label="Oxidation states" value={element.oxidationStates} />
-              <Stat
-                label="Group / Period"
-                value={element.group === 0 ? `f-series · P${element.period}` : `G${element.group} · P${element.period}`}
-              />
-            </div>
-
-            <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
-              <div className="text-[9.5px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-                Discovery
-              </div>
-              <div className="mt-1 text-[13px] text-zinc-200">
-                {element.discoveredYear ? (
-                  <span className="font-mono">{element.discoveredYear}</span>
-                ) : (
-                  <span className="font-mono">Antiquity</span>
-                )}
-                <span className="text-zinc-400"> — {element.discoveredBy}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'bohr2d' && (
-          <div className="flex h-full min-h-[420px] flex-col gap-3">
-            <ModelControls
-              playing={playing}
-              speed={speed}
-              onToggle={() => setPlaying((p) => !p)}
-              onSpeed={setSpeed}
-              extra={
-                <button
-                  onClick={() => setShowLabels((s) => !s)}
-                  className={`rounded-md border px-2.5 py-1.5 text-[10px] uppercase tracking-widest transition ${
-                    showLabels
-                      ? 'border-teal-400/40 bg-teal-400/10 text-teal-300'
-                      : 'border-white/10 bg-white/[0.03] text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  Shell labels
-                </button>
-              }
+          <div className="ml-auto flex items-center gap-2">
+            <span className="font-mono text-[10px] text-zinc-500">
+              ×{String(speed).replace(/\.0+$/, '.0')}
+            </span>
+            <input
+              type="range"
+              min={0.25}
+              max={3}
+              step={0.25}
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+              className="w-24"
+              aria-label="Model animation speed"
             />
-            <div className="min-h-0 flex-1">
-              <Bohr2D element={element} playing={playing} speed={speed} showLabels={showLabels} />
+          </div>
+        </div>
+
+        {/* shell population */}
+        <div className="space-y-1">
+          <div className="text-[9px] uppercase tracking-wider text-zinc-600">
+            shell population (max {SHELL_MAX} e⁻ scale)
+          </div>
+          {el.shells.map((n, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-3.5 font-mono text-[10px] text-zinc-500">
+                {SHELL_LETTERS[i] ?? `n${i + 1}`}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-sm bg-white/5">
+                <div
+                  className="h-full rounded-sm"
+                  style={{
+                    width: `${Math.min(100, (n / SHELL_MAX) * 100)}%`,
+                    background: accent,
+                    opacity: 0.45 + (0.55 * i) / Math.max(1, el.shells.length - 1),
+                  }}
+                />
+              </div>
+              <span className="w-9 text-right font-mono text-[10px] text-zinc-400">{n} e⁻</span>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      </Section>
 
-        {tab === 'bohr3d' && (
-          <div className="flex h-full min-h-[440px] flex-col gap-3">
-            <ModelControls
-              playing={playing}
-              speed={speed}
-              onToggle={() => setPlaying((p) => !p)}
-              onSpeed={setSpeed}
-              extra={
-                <>
-                  <button
-                    onClick={() => setAutoRotate((s) => !s)}
-                    className={`rounded-md border px-2.5 py-1.5 text-[10px] uppercase tracking-widest transition ${
-                      autoRotate
-                        ? 'border-teal-400/40 bg-teal-400/10 text-teal-300'
-                        : 'border-white/10 bg-white/[0.03] text-zinc-500 hover:text-zinc-300'
-                    }`}
-                  >
-                    Auto-orbit
-                  </button>
-                  <button
-                    onClick={() => setResetKey((k) => k + 1)}
-                    aria-label="Reset camera view"
-                    className="flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              }
-            />
-            <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-white/[0.07] bg-[#070a10]">
-              <Bohr3D
-                key={`${element.number}-${resetKey}`}
-                element={element}
-                playing={playing}
-                speed={speed}
-                autoRotate={autoRotate}
-              />
-            </div>
+      {/* atomic properties */}
+      <Section title="Atomic properties" accent={accent}>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Prop
+            label="Electron config"
+            value={<span className="text-[11px]">{configToSuperscript(el.config)}</span>}
+          />
+          <Prop label="Valence e⁻ (Bohr)" value={valenceOf(el)} />
+          <Prop label="Electronegativity" value={fmt(el.electronegativity, '', 2)} />
+          <Prop label="Ionization E₁" value={fmt(el.ionizationEnergy, 'eV', 2)} />
+          <Prop
+            label="Electron affinity"
+            value={el.electronAffinity == null ? '—' : `${el.electronAffinity} kJ/mol`}
+          />
+          <Prop label="Atomic radius" value={fmt(el.atomicRadius, 'pm', 0)} />
+          <div className="col-span-2">
+            <Prop label="Oxidation states" value={el.oxidationStates || '—'} />
           </div>
-        )}
+        </div>
+      </Section>
 
-        {tab === 'orbitals' && (
-          <div className="h-full min-h-[440px]">
-            <Orbitals3D autoRotate={autoRotate} />
-          </div>
-        )}
+      {/* physical properties */}
+      <Section title="Physical properties" accent={accent}>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Prop label="Phase at STP" value={<span className="capitalize">{el.phase}</span>} />
+          <Prop label="Density" value={el.density == null ? '—' : `${el.density} g/cm³`} />
+          <Prop
+            label="Melting point"
+            value={
+              el.meltingPoint == null
+                ? '—'
+                : `${el.meltingPoint} K · ${kelvinToC(el.meltingPoint)} °C`
+            }
+          />
+          <Prop
+            label="Boiling point"
+            value={
+              el.boilingPoint == null
+                ? '—'
+                : `${el.boilingPoint} K · ${kelvinToC(el.boilingPoint)} °C`
+            }
+          />
+        </div>
+      </Section>
 
-        {tab === 'isotopes' && <IsotopeTable element={element} />}
+      {/* periodic trends */}
+      <Section title="Trend percentile (of reference range)" accent={accent}>
+        <div className="space-y-2">
+          {TRENDS.map((t) => {
+            const val = el[t.field]
+            const pct = heatT(el, t.field)
+            return (
+              <div key={t.field}>
+                <div className="flex items-baseline justify-between text-[10px]">
+                  <span className="text-zinc-400">{t.label}</span>
+                  <span className="font-mono text-zinc-300">
+                    {val == null ? '—' : `${shortVal(val)}${t.unit}`}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                  {pct != null && (
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${(pct * 100).toFixed(1)}%`,
+                        background: heatForField(el, t.field),
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Section>
 
-        {tab === 'trends' && (
-          <div className="h-full min-h-[380px]">
-            <TrendsChart element={element} field={trendField} onFieldChange={setTrendField} />
-          </div>
+      {/* discovery */}
+      <Section title="Discovery & notes" accent={accent}>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Prop label="Discovered" value={el.discoveredYear ?? 'Antiquity'} />
+          <Prop
+            label="Credited to"
+            value={<span className="text-[11px]">{el.discoveredBy || '—'}</span>}
+          />
+        </div>
+        {bracket && (
+          <p className="text-[10px] leading-relaxed text-zinc-500">
+            † This element has no standard atomic weight (all isotopes unstable); the value shown is
+            the mass number of the most stable isotope, conventionally bracketed in IUPAC tables.
+          </p>
         )}
-      </div>
+        <p className="text-[11.5px] leading-relaxed text-zinc-400">{el.summary}</p>
+      </Section>
     </div>
   )
 }
