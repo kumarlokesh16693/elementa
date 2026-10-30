@@ -151,7 +151,17 @@ export default function Bohr3D({ element, accent, speed = 1, paused = false }: B
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 300)
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.domElement.style.display = 'block'
+    /*
+     * Pin the canvas CSS box to its mount (absolute inset-0 + 100%).
+     * setSize(w, h, false) only sizes the drawing buffer — without explicit
+     * CSS dimensions the canvas would render at buffer size (mount × DPR)
+     * and overflow onto the 2D/3D controls on any devicePixelRatio > 1,
+     * swallowing their clicks via OrbitControls.
+     */
+    renderer.domElement.style.position = 'absolute'
+    renderer.domElement.style.inset = '0'
+    renderer.domElement.style.width = '100%'
+    renderer.domElement.style.height = '100%'
     renderer.domElement.style.touchAction = 'none'
     mount.appendChild(renderer.domElement)
 
@@ -261,5 +271,11 @@ export default function Bohr3D({ element, accent, speed = 1, paused = false }: B
     rebuildRef.current?.(element, accent)
   }, [element, accent])
 
-  return <div ref={mountRef} className="h-full w-full" data-testid="bohr3d-canvas" />
+  return (
+    <div
+      ref={mountRef}
+      className="relative h-full w-full overflow-hidden"
+      data-testid="bohr3d-canvas"
+    />
+  )
 }

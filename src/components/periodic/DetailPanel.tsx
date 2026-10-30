@@ -276,14 +276,14 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden">
           {/* atomic model viewer */}
           <div className="flex shrink-0 flex-col border-b border-white/10 bg-[#060a12] lg:min-h-0 lg:shrink lg:border-b-0 lg:border-r">
-            <div className="relative h-[300px] sm:h-[340px] lg:h-auto lg:min-h-0 lg:flex-1">
+            <div className="relative h-[300px] overflow-hidden sm:h-[340px] lg:h-auto lg:min-h-0 lg:flex-1">
               {modelCanvas}
               <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
                 Bohr shell model · {el.shells.length} shells · Σ
                 {el.shells.reduce((a, b) => a + b, 0)} e⁻
               </div>
             </div>
-            <div className="shrink-0 border-t border-white/10 px-4 py-2.5">
+            <div className="relative z-10 shrink-0 border-t border-white/10 px-4 py-2.5">
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
                 {el.shells.map((n, i) => (
                   <span
