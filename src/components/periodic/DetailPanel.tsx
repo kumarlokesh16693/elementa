@@ -252,36 +252,31 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
         {bracket && <Chip tint="#94a3b8">† bracketed mass</Chip>}
       </div>
 
-      {/* Bohr model viewer */}
+      {/* Atomic model — the live 2D/3D viewer lives in a modal */}
       <Section title="Atomic model" accent={accent}>
-        <div className="relative h-[280px] overflow-hidden rounded-lg border border-white/10 bg-[#060a12] xl:h-[320px]">
-          {expanded ? (
-            <div className="flex h-full flex-col items-center justify-center gap-1 text-center">
-              <span className="text-[11px] text-zinc-400">Model opened in enlarged view</span>
-              <span className="text-[10px] text-zinc-600">close the overlay to return it here</span>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          title={`Open the ${el.name} atomic model in modal`}
+          aria-label={`Open the ${el.name} atomic model in modal view`}
+          className="group relative block h-[210px] w-full overflow-hidden rounded-lg border border-white/10 bg-[#060a12] text-left transition hover:border-white/25"
+        >
+          <div className="flex h-full items-center justify-center">
+            <div className="h-[164px] w-[164px] opacity-75 transition duration-200 group-hover:scale-[1.05] group-hover:opacity-100">
+              <Bohr2D element={el} accent={accent} animated={false} />
             </div>
-          ) : (
-            modelCanvas
-          )}
-          {!expanded && (
-            <>
-              <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
-                {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit'}
-              </div>
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                aria-label="Enlarge model"
-                title="Open in enlarged view"
-                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded bg-black/50 text-zinc-300 backdrop-blur-sm transition hover:bg-black/70 hover:text-white"
-              >
-                <MaximizeIcon />
-              </button>
-            </>
-          )}
-        </div>
-
-        {controls}
+          </div>
+          <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
+            {el.shells.length} shells · Σ{el.shells.reduce((a, b) => a + b, 0)} e⁻
+          </div>
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-white/10 bg-black/60 px-3 py-2 backdrop-blur-sm">
+            <span className="text-[11px] text-zinc-400">interactive 2D · 3D viewer</span>
+            <span className="flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[10.5px] font-medium text-zinc-100 transition group-hover:border-amber-400/50 group-hover:bg-amber-400/15 group-hover:text-amber-300">
+              <MaximizeIcon />
+              Open in modal
+            </span>
+          </div>
+        </button>
 
         {/* shell population */}
         <div className="space-y-1">
@@ -436,7 +431,27 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
               </button>
             </div>
             <div className="relative min-h-0 flex-1 bg-[#060a12]">{modelCanvas}</div>
-            <div className="shrink-0 border-t border-white/10 px-4 py-2.5">{controls}</div>
+            <div className="shrink-0 border-t border-white/10 px-4 py-2.5">
+              <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                {el.shells.map((n, i) => (
+                  <span
+                    key={i}
+                    className="rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none"
+                    style={{
+                      color: accent,
+                      borderColor: hexWithAlpha(accent, 0.35),
+                      background: hexWithAlpha(accent, 0.08),
+                    }}
+                  >
+                    {SHELL_LETTERS[i] ?? `n${i + 1}`}·{n}e⁻
+                  </span>
+                ))}
+                <span className="ml-auto hidden font-mono text-[10px] text-zinc-600 md:inline">
+                  Esc to close
+                </span>
+              </div>
+              {controls}
+            </div>
           </div>
         </div>
       )}
