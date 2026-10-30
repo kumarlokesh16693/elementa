@@ -192,22 +192,41 @@ aside *::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/* periodic table tile sizing */
+/* periodic table tile sizing — fluid, so all 18 columns + f-block rows
+   always fit the window without a fixed sidebar stealing width */
 .pt-grid {
-  --tile: 42px;
-  --tile-gap: 4px;
+  --tile: clamp(
+    30px,
+    min(calc((100vw - 170px) / 18), calc((100vh - 340px) / 9)),
+    64px
+  );
+  --tile-gap: 5px;
 }
-@media (min-width: 768px) {
-  .pt-grid {
-    --tile: 54px;
-    --tile-gap: 5px;
+
+/* element detail modal entrance */
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
-@media (min-width: 1536px) {
-  .pt-grid {
-    --tile: 62px;
-    --tile-gap: 6px;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
+  to {
+    opacity: 1;
+  }
+}
+.modal-backdrop {
+  animation: fadeIn 0.15s ease-out;
+}
+.modal-card {
+  animation: modalIn 0.18s ease-out;
 }
 
 /* native range input polish for model speed control */

@@ -16,6 +16,7 @@ import DetailPanel from '@/components/periodic/DetailPanel'
 
 export default function Home() {
   const [selectedZ, setSelectedZ] = useState(6) // Carbon
+  const [panelOpen, setPanelOpen] = useState(false)
   const [colorMode, setColorMode] = useState<ColorMode>('category')
   const [activeCats, setActiveCats] = useState<Set<CategoryKey> | null>(null)
   const [query, setQuery] = useState('')
@@ -30,7 +31,10 @@ export default function Home() {
     [query, results],
   )
 
-  const select = (z: number) => setSelectedZ(z)
+  const select = (z: number) => {
+    setSelectedZ(z)
+    setPanelOpen(true)
+  }
 
   const toggleCat = (k: CategoryKey) => {
     setActiveCats((prev) => {
@@ -52,7 +56,7 @@ export default function Home() {
             ELEM<span className="text-amber-400">E</span>NTA
           </h1>
           <span className="hidden font-mono text-[10px] text-zinc-500 md:inline">
-            research-grade periodic table · 118 elements · 2D/3D Bohr
+            research-grade · 118 elements · click any element for full details
           </span>
         </div>
 
@@ -216,38 +220,40 @@ export default function Home() {
         )}
       </div>
 
-      {/* main */}
-      <main className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+      {/* main — full-width table, no sidebar so every element stays visible */}
+      <main className="relative flex-1 overflow-auto">
         <div
-          className="flex flex-1 justify-center overflow-auto p-4 lg:p-6"
+          className="flex min-h-full flex-col items-center p-4 lg:p-6"
           style={{
             background:
               'radial-gradient(1100px 520px at 50% -8%, rgba(251,191,36,0.05), transparent 70%)',
           }}
         >
-          <div className="flex flex-col items-center">
-            <PeriodicTable
-              selected={selectedZ}
-              onSelect={(el) => select(el.number)}
-              colorMode={colorMode}
-              matches={matches}
-              activeCategories={activeCats}
-            />
-            <p className="mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600">
-              Reference values follow IUPAC conventions — Pauling electronegativity, first ionization
-              energy in eV, electron affinity in kJ/mol, empirical radii in pm (calculated for noble
-              gases), temperatures in K, densities at STP. Bracketed standard atomic weights apply to
-              Tc, Pm and Z ≥ 84. A dash (—) marks properties with no accepted experimental value.
-              Radioactive nuclides are flagged with a dot; Bohr shells are a pedagogical
-              approximation, not a quantum-mechanical orbital picture.
-            </p>
-          </div>
+          <PeriodicTable
+            selected={selectedZ}
+            onSelect={(el) => select(el.number)}
+            colorMode={colorMode}
+            matches={matches}
+            activeCategories={activeCats}
+          />
+          <p className="mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600">
+            Reference values follow IUPAC conventions — Pauling electronegativity, first ionization
+            energy in eV, electron affinity in kJ/mol, empirical radii in pm (calculated for noble
+            gases), temperatures in K, densities at STP. Bracketed standard atomic weights apply to
+            Tc, Pm and Z ≥ 84. A dash (—) marks properties with no accepted experimental value.
+            Radioactive nuclides are flagged with a dot; Bohr shells are a pedagogical
+            approximation, not a quantum-mechanical orbital picture.
+          </p>
         </div>
-
-        <aside className="w-full shrink-0 border-t border-white/10 bg-[#0a0f18] lg:h-full lg:w-[384px] lg:overflow-y-auto lg:border-l lg:border-t-0">
-          <DetailPanel element={selectedEl} accent={accent} />
-        </aside>
       </main>
+
+      {/* full element detail — modal only */}
+      <DetailPanel
+        element={selectedEl}
+        accent={accent}
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+      />
     </div>
   )
 }

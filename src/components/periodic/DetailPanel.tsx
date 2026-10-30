@@ -19,6 +19,8 @@ import Bohr3D from './Bohr3D'
 interface DetailPanelProps {
   element: ElementData
   accent: string
+  open: boolean
+  onClose: () => void
 }
 
 function shortVal(v: number | null): string {
@@ -72,27 +74,6 @@ function Prop({ label, value }: { label: string; value: ReactNode }) {
       <div className="text-[9px] uppercase tracking-wider text-zinc-500">{label}</div>
       <div className="mt-0.5 font-mono text-[12px] leading-tight text-zinc-200">{value}</div>
     </div>
-  )
-}
-
-function MaximizeIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="15 3 21 3 21 9" />
-      <polyline points="9 21 3 21 3 15" />
-      <line x1="21" y1="3" x2="14" y2="10" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
   )
 }
 
@@ -183,21 +164,26 @@ const TRENDS: { field: TrendField; label: string; unit: string }[] = [
 
 const SHELL_MAX = 32
 
-export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
+/**
+ * Full element detail, shown exclusively inside a modal so the periodic
+ * table keeps the entire window width and every element stays visible.
+ */
+export default function DetailPanel({ element: el, accent, open, onClose }: DetailPanelProps) {
   const [model, setModel] = useState<'2d' | '3d'>('2d')
   const [paused, setPaused] = useState(false)
   const [speed, setSpeed] = useState(1)
-  const [expanded, setExpanded] = useState(false)
 
-  /* close the enlarged overlay with Escape */
+  /* close the modal with Escape */
   useEffect(() => {
-    if (!expanded) return
+    if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setExpanded(false)
+      if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [expanded])
+  }, [open, onClose])
+
+  if (!open) return null
 
   const modelCanvas =
     model === '2d' ? (
@@ -221,216 +207,73 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
   const cat = CATEGORY_MAP[el.category]
 
   return (
-    <div className="space-y-5 p-4">
-      {/* identity */}
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border"
-          style={{ background: hexWithAlpha(accent, 0.12), borderColor: hexWithAlpha(accent, 0.5) }}
-        >
-          <span className="font-mono text-[9px] leading-none opacity-75" style={{ color: accent }}>
-            {el.number}
-          </span>
-          <span className="text-xl font-bold leading-tight" style={{ color: accent }}>
-            {el.symbol}
-          </span>
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-lg font-semibold text-zinc-100">{el.name}</div>
-          <div className="font-mono text-[11px] text-zinc-500">
-            {cat.label} · {el.mass} u{bracket ? ' †' : ''}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        <Chip tint={cat.color}>{cat.label}</Chip>
-        <Chip>phase: {el.phase}</Chip>
-        <Chip>group {el.group > 0 ? el.group : '—'}</Chip>
-        <Chip>period {el.period}</Chip>
-        {el.radioactive && <Chip tint="#fbbf24">☢ radioactive</Chip>}
-        {bracket && <Chip tint="#94a3b8">† bracketed mass</Chip>}
-      </div>
-
-      {/* Atomic model — the live 2D/3D viewer lives in a modal */}
-      <Section title="Atomic model" accent={accent}>
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          title={`Open the ${el.name} atomic model in modal`}
-          aria-label={`Open the ${el.name} atomic model in modal view`}
-          className="group relative block h-[210px] w-full overflow-hidden rounded-lg border border-white/10 bg-[#060a12] text-left transition hover:border-white/25"
-        >
-          <div className="flex h-full items-center justify-center">
-            <div className="h-[164px] w-[164px] opacity-75 transition duration-200 group-hover:scale-[1.05] group-hover:opacity-100">
-              <Bohr2D element={el} accent={accent} animated={false} />
-            </div>
-          </div>
-          <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
-            {el.shells.length} shells · Σ{el.shells.reduce((a, b) => a + b, 0)} e⁻
-          </div>
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-white/10 bg-black/60 px-3 py-2 backdrop-blur-sm">
-            <span className="text-[11px] text-zinc-400">interactive 2D · 3D viewer</span>
-            <span className="flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[10.5px] font-medium text-zinc-100 transition group-hover:border-amber-400/50 group-hover:bg-amber-400/15 group-hover:text-amber-300">
-              <MaximizeIcon />
-              Open in modal
+    <div
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${el.name} — full details`}
+    >
+      <div
+        className="modal-card flex h-full max-h-[900px] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0a0f18] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* header — identity */}
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/10 px-4 py-3">
+          <div
+            className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg border"
+            style={{
+              background: hexWithAlpha(accent, 0.12),
+              borderColor: hexWithAlpha(accent, 0.5),
+            }}
+          >
+            <span className="font-mono text-[8px] leading-none opacity-75" style={{ color: accent }}>
+              {el.number}
+            </span>
+            <span className="text-base font-bold leading-tight" style={{ color: accent }}>
+              {el.symbol}
             </span>
           </div>
-        </button>
-
-        {/* shell population */}
-        <div className="space-y-1">
-          <div className="text-[9px] uppercase tracking-wider text-zinc-600">
-            shell population (max {SHELL_MAX} e⁻ scale)
-          </div>
-          {el.shells.map((n, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="w-3.5 font-mono text-[10px] text-zinc-500">
-                {SHELL_LETTERS[i] ?? `n${i + 1}`}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-zinc-100">
+              {el.name}
+              <span className="ml-2 font-mono text-[11px] font-normal text-zinc-500">
+                {el.mass} u{bracket ? ' †' : ''}
               </span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-sm bg-white/5">
-                <div
-                  className="h-full rounded-sm"
-                  style={{
-                    width: `${Math.min(100, (n / SHELL_MAX) * 100)}%`,
-                    background: accent,
-                    opacity: 0.45 + (0.55 * i) / Math.max(1, el.shells.length - 1),
-                  }}
-                />
-              </div>
-              <span className="w-9 text-right font-mono text-[10px] text-zinc-400">{n} e⁻</span>
             </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* atomic properties */}
-      <Section title="Atomic properties" accent={accent}>
-        <div className="grid grid-cols-2 gap-1.5">
-          <Prop
-            label="Electron config"
-            value={<span className="text-[11px]">{configToSuperscript(el.config)}</span>}
-          />
-          <Prop label="Valence e⁻ (Bohr)" value={valenceOf(el)} />
-          <Prop label="Electronegativity" value={fmt(el.electronegativity, '', 2)} />
-          <Prop label="Ionization E₁" value={fmt(el.ionizationEnergy, 'eV', 2)} />
-          <Prop
-            label="Electron affinity"
-            value={el.electronAffinity == null ? '—' : `${el.electronAffinity} kJ/mol`}
-          />
-          <Prop label="Atomic radius" value={fmt(el.atomicRadius, 'pm', 0)} />
-          <div className="col-span-2">
-            <Prop label="Oxidation states" value={el.oxidationStates || '—'} />
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <Chip tint={cat.color}>{cat.label}</Chip>
+              <Chip>phase: {el.phase}</Chip>
+              <Chip>group {el.group > 0 ? el.group : '—'}</Chip>
+              <Chip>period {el.period}</Chip>
+              {el.radioactive && <Chip tint="#fbbf24">☢ radioactive</Chip>}
+              {bracket && <Chip tint="#94a3b8">† bracketed mass</Chip>}
+            </div>
           </div>
-        </div>
-      </Section>
-
-      {/* physical properties */}
-      <Section title="Physical properties" accent={accent}>
-        <div className="grid grid-cols-2 gap-1.5">
-          <Prop label="Phase at STP" value={<span className="capitalize">{el.phase}</span>} />
-          <Prop label="Density" value={el.density == null ? '—' : `${el.density} g/cm³`} />
-          <Prop
-            label="Melting point"
-            value={
-              el.meltingPoint == null
-                ? '—'
-                : `${el.meltingPoint} K · ${kelvinToC(el.meltingPoint)} °C`
-            }
-          />
-          <Prop
-            label="Boiling point"
-            value={
-              el.boilingPoint == null
-                ? '—'
-                : `${el.boilingPoint} K · ${kelvinToC(el.boilingPoint)} °C`
-            }
-          />
-        </div>
-      </Section>
-
-      {/* periodic trends */}
-      <Section title="Trend percentile (of reference range)" accent={accent}>
-        <div className="space-y-2">
-          {TRENDS.map((t) => {
-            const val = el[t.field]
-            const pct = heatT(el, t.field)
-            return (
-              <div key={t.field}>
-                <div className="flex items-baseline justify-between text-[10px]">
-                  <span className="text-zinc-400">{t.label}</span>
-                  <span className="font-mono text-zinc-300">
-                    {val == null ? '—' : `${shortVal(val)}${t.unit}`}
-                  </span>
-                </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
-                  {pct != null && (
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${(pct * 100).toFixed(1)}%`,
-                        background: heatForField(el, t.field),
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </Section>
-
-      {/* discovery */}
-      <Section title="Discovery & notes" accent={accent}>
-        <div className="grid grid-cols-2 gap-1.5">
-          <Prop label="Discovered" value={el.discoveredYear ?? 'Antiquity'} />
-          <Prop
-            label="Credited to"
-            value={<span className="text-[11px]">{el.discoveredBy || '—'}</span>}
-          />
-        </div>
-        {bracket && (
-          <p className="text-[10px] leading-relaxed text-zinc-500">
-            † This element has no standard atomic weight (all isotopes unstable); the value shown is
-            the mass number of the most stable isotope, conventionally bracketed in IUPAC tables.
-          </p>
-        )}
-        <p className="text-[11.5px] leading-relaxed text-zinc-400">{el.summary}</p>
-      </Section>
-
-      {/* enlarged model overlay */}
-      {expanded && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm sm:p-8"
-          onClick={() => setExpanded(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${el.name} atomic model — enlarged view`}
-        >
-          <div
-            className="flex h-full max-h-[900px] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0a0f18] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+          <span className="ml-auto hidden shrink-0 font-mono text-[10px] text-zinc-500 xl:inline">
+            {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit · scroll to zoom'}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close element details"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 text-zinc-400 transition hover:border-white/30 hover:text-zinc-100"
           >
-            <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
-              <span className="font-mono text-sm font-bold" style={{ color: accent }}>
-                {el.symbol}
-              </span>
-              <span className="truncate text-sm font-semibold text-zinc-200">
-                {el.name} — atomic model
-              </span>
-              <span className="ml-auto hidden shrink-0 font-mono text-[10px] text-zinc-500 sm:inline">
-                {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit · scroll to zoom'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                aria-label="Close enlarged model"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 text-zinc-400 transition hover:border-white/30 hover:text-zinc-100"
-              >
-                <CloseIcon />
-              </button>
+            <CloseIcon />
+          </button>
+        </div>
+
+        {/* body — model on the left, data on the right */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden">
+          {/* atomic model viewer */}
+          <div className="flex shrink-0 flex-col border-b border-white/10 bg-[#060a12] lg:min-h-0 lg:shrink lg:border-b-0 lg:border-r">
+            <div className="relative h-[300px] sm:h-[340px] lg:h-auto lg:min-h-0 lg:flex-1">
+              {modelCanvas}
+              <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
+                Bohr shell model · {el.shells.length} shells · Σ
+                {el.shells.reduce((a, b) => a + b, 0)} e⁻
+              </div>
             </div>
-            <div className="relative min-h-0 flex-1 bg-[#060a12]">{modelCanvas}</div>
             <div className="shrink-0 border-t border-white/10 px-4 py-2.5">
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
                 {el.shells.map((n, i) => (
@@ -453,8 +296,135 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
               {controls}
             </div>
           </div>
+
+          {/* data column */}
+          <div className="space-y-5 p-4 lg:min-h-0 lg:overflow-y-auto">
+            {/* shell population */}
+            <Section title="Shell population" accent={accent}>
+              <div className="space-y-1">
+                <div className="text-[9px] uppercase tracking-wider text-zinc-600">
+                  max {SHELL_MAX} e⁻ scale
+                </div>
+                {el.shells.map((n, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-3.5 font-mono text-[10px] text-zinc-500">
+                      {SHELL_LETTERS[i] ?? `n${i + 1}`}
+                    </span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-sm bg-white/5">
+                      <div
+                        className="h-full rounded-sm"
+                        style={{
+                          width: `${Math.min(100, (n / SHELL_MAX) * 100)}%`,
+                          background: accent,
+                          opacity: 0.45 + (0.55 * i) / Math.max(1, el.shells.length - 1),
+                        }}
+                      />
+                    </div>
+                    <span className="w-9 text-right font-mono text-[10px] text-zinc-400">
+                      {n} e⁻
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+
+            {/* atomic properties */}
+            <Section title="Atomic properties" accent={accent}>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Prop
+                  label="Electron config"
+                  value={<span className="text-[11px]">{configToSuperscript(el.config)}</span>}
+                />
+                <Prop label="Valence e⁻ (Bohr)" value={valenceOf(el)} />
+                <Prop label="Electronegativity" value={fmt(el.electronegativity, '', 2)} />
+                <Prop label="Ionization E₁" value={fmt(el.ionizationEnergy, 'eV', 2)} />
+                <Prop
+                  label="Electron affinity"
+                  value={el.electronAffinity == null ? '—' : `${el.electronAffinity} kJ/mol`}
+                />
+                <Prop label="Atomic radius" value={fmt(el.atomicRadius, 'pm', 0)} />
+                <div className="col-span-2">
+                  <Prop label="Oxidation states" value={el.oxidationStates || '—'} />
+                </div>
+              </div>
+            </Section>
+
+            {/* physical properties */}
+            <Section title="Physical properties" accent={accent}>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Prop label="Phase at STP" value={<span className="capitalize">{el.phase}</span>} />
+                <Prop label="Density" value={el.density == null ? '—' : `${el.density} g/cm³`} />
+                <Prop
+                  label="Melting point"
+                  value={
+                    el.meltingPoint == null
+                      ? '—'
+                      : `${el.meltingPoint} K · ${kelvinToC(el.meltingPoint)} °C`
+                  }
+                />
+                <Prop
+                  label="Boiling point"
+                  value={
+                    el.boilingPoint == null
+                      ? '—'
+                      : `${el.boilingPoint} K · ${kelvinToC(el.boilingPoint)} °C`
+                  }
+                />
+              </div>
+            </Section>
+
+            {/* periodic trends */}
+            <Section title="Trend percentile (of reference range)" accent={accent}>
+              <div className="space-y-2">
+                {TRENDS.map((t) => {
+                  const val = el[t.field]
+                  const pct = heatT(el, t.field)
+                  return (
+                    <div key={t.field}>
+                      <div className="flex items-baseline justify-between text-[10px]">
+                        <span className="text-zinc-400">{t.label}</span>
+                        <span className="font-mono text-zinc-300">
+                          {val == null ? '—' : `${shortVal(val)}${t.unit}`}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+                        {pct != null && (
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${(pct * 100).toFixed(1)}%`,
+                              background: heatForField(el, t.field),
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
+
+            {/* discovery */}
+            <Section title="Discovery & notes" accent={accent}>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Prop label="Discovered" value={el.discoveredYear ?? 'Antiquity'} />
+                <Prop
+                  label="Credited to"
+                  value={<span className="text-[11px]">{el.discoveredBy || '—'}</span>}
+                />
+              </div>
+              {bracket && (
+                <p className="text-[10px] leading-relaxed text-zinc-500">
+                  † This element has no standard atomic weight (all isotopes unstable); the value
+                  shown is the mass number of the most stable isotope, conventionally bracketed in
+                  IUPAC tables.
+                </p>
+              )}
+              <p className="text-[11.5px] leading-relaxed text-zinc-400">{el.summary}</p>
+            </Section>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
