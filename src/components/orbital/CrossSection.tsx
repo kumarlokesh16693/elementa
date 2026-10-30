@@ -60,8 +60,8 @@ export default function CrossSection({
   }, [orbital, zEff, extent])
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[#080b12]">
-      <canvas ref={ref} width={S} height={S} className="block w-full" role="img" aria-label="ψ² cross-section in the xz plane" />
+    <div className="relative mx-auto w-full max-w-[460px] overflow-hidden rounded-lg border border-white/10 bg-[#080b12]">
+      <canvas ref={ref} width={S} height={S} className="block h-auto w-full" role="img" aria-label="ψ² cross-section in the xz plane" />
       <span className="pointer-events-none absolute left-2 top-1.5 font-mono text-[8.5px] text-zinc-500">
         xz-plane · y = 0
       </span>

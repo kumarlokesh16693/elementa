@@ -81,7 +81,7 @@ function LabInner() {
   return (
     <div className="flex min-h-dvh flex-col bg-[#070a10] text-zinc-200">
       {/* header */}
-      <header className="flex h-14 shrink-0 flex-wrap items-center gap-4 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur">
+      <header className="sticky top-0 z-30 flex h-14 shrink-0 flex-wrap items-center gap-4 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur">
         <Link
           href="/"
           className="rounded-md border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"

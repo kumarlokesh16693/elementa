@@ -182,6 +182,27 @@ aside *::-webkit-scrollbar-thumb:hover {
   scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
+/* page-level vertical scrollbar for document-flow pages (/orbitals, /mo) —
+   amber thumb on a dark track so it stays visible against #070a10 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(251, 191, 36, 0.35) rgba(10, 15, 24, 0.6);
+}
+html::-webkit-scrollbar {
+  width: 10px;
+}
+html::-webkit-scrollbar-track {
+  background: rgba(10, 15, 24, 0.6);
+}
+html::-webkit-scrollbar-thumb {
+  background: rgba(251, 191, 36, 0.3);
+  border-radius: 5px;
+  border: 2px solid rgba(10, 15, 24, 0.9);
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: rgba(251, 191, 36, 0.5);
+}
+
 /* electron orbital rotation for the 2D Bohr model */
 @keyframes orbit {
   from {
