@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { CategoryKey, ColorMode } from '@/lib/periodic/types'
 import { CATEGORIES, COLOR_MODES, BLOCK_COLORS, PHASE_COLORS } from '@/lib/periodic/types'
 import {
@@ -16,8 +17,20 @@ import PeriodicTable from '@/components/periodic/PeriodicTable'
 import DetailPanel from '@/components/periodic/DetailPanel'
 
 export default function Home() {
-  const [selectedZ, setSelectedZ] = useState(6) // Carbon
-  const [panelOpen, setPanelOpen] = useState(false)
+  return (
+    <Suspense fallback={null}>
+      <HomeInner />
+    </Suspense>
+  )
+}
+
+function HomeInner() {
+  const params = useSearchParams()
+  const eParam = parseInt(params.get('e') ?? '', 10)
+  const hasE = Number.isFinite(eParam) && eParam >= 1 && eParam <= 118
+
+  const [selectedZ, setSelectedZ] = useState(hasE ? eParam : 6) // Carbon (or ?e= deep link)
+  const [panelOpen, setPanelOpen] = useState(hasE)
   const [colorMode, setColorMode] = useState<ColorMode>('category')
   const [activeCats, setActiveCats] = useState<Set<CategoryKey> | null>(null)
   const [query, setQuery] = useState('')
@@ -143,6 +156,14 @@ export default function Home() {
           className="shrink-0 rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20"
         >
           Orbital lab
+        </Link>
+
+        {/* Segrè chart of nuclides */}
+        <Link
+          href="/segre"
+          className="shrink-0 rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-400/20"
+        >
+          Segrè chart
         </Link>
       </header>
 

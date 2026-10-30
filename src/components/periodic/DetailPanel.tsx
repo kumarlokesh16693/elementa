@@ -478,6 +478,12 @@ function IsotopesSection({
       >
         Open isotope explorer → isotope table & decay chains
       </button>
+      <a
+        href={`/segre?z=${el.number}`}
+        className="mt-1.5 block w-full rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-center text-[11.5px] font-medium text-emerald-300 transition hover:bg-emerald-400/20"
+      >
+        View all nuclides of {el.symbol} in the Segrè chart →
+      </a>
     </Section>
   )
 }
