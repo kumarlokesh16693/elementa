@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { ElementData } from '@/lib/periodic/types'
 import { CATEGORY_MAP, SHELL_LETTERS } from '@/lib/periodic/types'
 import {
@@ -75,6 +75,97 @@ function Prop({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
+function MaximizeIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  )
+}
+
+interface ControlsRowProps {
+  model: '2d' | '3d'
+  setModel: (m: '2d' | '3d') => void
+  paused: boolean
+  togglePaused: () => void
+  speed: number
+  setSpeed: (s: number) => void
+}
+
+function ControlsRow({ model, setModel, paused, togglePaused, speed, setSpeed }: ControlsRowProps) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex overflow-hidden rounded-md border border-white/10">
+        {(['2d', '3d'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setModel(m)}
+            className={`px-2.5 py-1 text-[11px] uppercase tracking-wide transition ${
+              model === m
+                ? 'bg-white/10 text-zinc-100'
+                : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+            }`}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={togglePaused}
+        className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"
+      >
+        {paused ? '▶ Play' : '❚❚ Pause'}
+      </button>
+      <div className="ml-auto flex items-center gap-2">
+        <span className="font-mono text-[10px] text-zinc-500">×{speed}</span>
+        <input
+          type="range"
+          min={0.25}
+          max={3}
+          step={0.25}
+          value={speed}
+          onChange={(e) => setSpeed(parseFloat(e.target.value))}
+          className="w-24"
+          aria-label="Model animation speed"
+        />
+      </div>
+    </div>
+  )
+}
+
 type TrendField =
   | 'electronegativity'
   | 'ionizationEnergy'
@@ -96,6 +187,35 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
   const [model, setModel] = useState<'2d' | '3d'>('2d')
   const [paused, setPaused] = useState(false)
   const [speed, setSpeed] = useState(1)
+  const [expanded, setExpanded] = useState(false)
+
+  /* close the enlarged overlay with Escape */
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expanded])
+
+  const modelCanvas =
+    model === '2d' ? (
+      <Bohr2D element={el} accent={accent} speed={speed} animated={!paused} />
+    ) : (
+      <Bohr3D element={el} accent={accent} speed={speed} paused={paused} />
+    )
+
+  const controls = (
+    <ControlsRow
+      model={model}
+      setModel={setModel}
+      paused={paused}
+      togglePaused={() => setPaused((p) => !p)}
+      speed={speed}
+      setSpeed={setSpeed}
+    />
+  )
 
   const bracket = usesBracketMass(el)
   const cat = CATEGORY_MAP[el.category]
@@ -135,56 +255,33 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
       {/* Bohr model viewer */}
       <Section title="Atomic model" accent={accent}>
         <div className="relative h-[280px] overflow-hidden rounded-lg border border-white/10 bg-[#060a12] xl:h-[320px]">
-          {model === '2d' ? (
-            <Bohr2D element={el} accent={accent} speed={speed} animated={!paused} />
+          {expanded ? (
+            <div className="flex h-full flex-col items-center justify-center gap-1 text-center">
+              <span className="text-[11px] text-zinc-400">Model opened in enlarged view</span>
+              <span className="text-[10px] text-zinc-600">close the overlay to return it here</span>
+            </div>
           ) : (
-            <Bohr3D element={el} accent={accent} speed={speed} paused={paused} />
+            modelCanvas
           )}
-          <div className="absolute right-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
-            {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit'}
-          </div>
+          {!expanded && (
+            <>
+              <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
+                {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                aria-label="Enlarge model"
+                title="Open in enlarged view"
+                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded bg-black/50 text-zinc-300 backdrop-blur-sm transition hover:bg-black/70 hover:text-white"
+              >
+                <MaximizeIcon />
+              </button>
+            </>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex overflow-hidden rounded-md border border-white/10">
-            {(['2d', '3d'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setModel(m)}
-                className={`px-2.5 py-1 text-[11px] uppercase tracking-wide transition ${
-                  model === m
-                    ? 'bg-white/10 text-zinc-100'
-                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => setPaused((p) => !p)}
-            className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"
-          >
-            {paused ? '▶ Play' : '❚❚ Pause'}
-          </button>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="font-mono text-[10px] text-zinc-500">
-              ×{String(speed).replace(/\.0+$/, '.0')}
-            </span>
-            <input
-              type="range"
-              min={0.25}
-              max={3}
-              step={0.25}
-              value={speed}
-              onChange={(e) => setSpeed(parseFloat(e.target.value))}
-              className="w-24"
-              aria-label="Model animation speed"
-            />
-          </div>
-        </div>
+        {controls}
 
         {/* shell population */}
         <div className="space-y-1">
@@ -305,6 +402,44 @@ export default function DetailPanel({ element: el, accent }: DetailPanelProps) {
         )}
         <p className="text-[11.5px] leading-relaxed text-zinc-400">{el.summary}</p>
       </Section>
+
+      {/* enlarged model overlay */}
+      {expanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm sm:p-8"
+          onClick={() => setExpanded(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${el.name} atomic model — enlarged view`}
+        >
+          <div
+            className="flex h-full max-h-[900px] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#0a0f18] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
+              <span className="font-mono text-sm font-bold" style={{ color: accent }}>
+                {el.symbol}
+              </span>
+              <span className="truncate text-sm font-semibold text-zinc-200">
+                {el.name} — atomic model
+              </span>
+              <span className="ml-auto hidden shrink-0 font-mono text-[10px] text-zinc-500 sm:inline">
+                {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit · scroll to zoom'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Close enlarged model"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 text-zinc-400 transition hover:border-white/30 hover:text-zinc-100"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="relative min-h-0 flex-1 bg-[#060a12]">{modelCanvas}</div>
+            <div className="shrink-0 border-t border-white/10 px-4 py-2.5">{controls}</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
