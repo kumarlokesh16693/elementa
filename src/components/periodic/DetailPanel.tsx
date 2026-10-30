@@ -18,6 +18,7 @@ import { isTopModal, popModal, pushModal } from '@/lib/modalStack'
 import { Bohr2D } from './Bohr2D'
 import Bohr3D from './Bohr3D'
 import IsotopeModal from './IsotopeModal'
+import QMViewer from '@/components/orbital/QMViewer'
 
 interface DetailPanelProps {
   element: ElementData
@@ -99,8 +100,8 @@ function CloseIcon() {
 }
 
 interface ControlsRowProps {
-  model: '2d' | '3d'
-  setModel: (m: '2d' | '3d') => void
+  model: '2d' | 'qm' | '3d'
+  setModel: (m: '2d' | 'qm' | '3d') => void
   paused: boolean
   togglePaused: () => void
   speed: number
@@ -111,7 +112,7 @@ function ControlsRow({ model, setModel, paused, togglePaused, speed, setSpeed }:
   return (
     <div className="flex items-center gap-2">
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {(['2d', '3d'] as const).map((m) => (
+        {(['2d', 'qm', '3d'] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -172,7 +173,7 @@ const SHELL_MAX = 32
  * table keeps the entire window width and every element stays visible.
  */
 export default function DetailPanel({ element: el, accent, open, onClose }: DetailPanelProps) {
-  const [model, setModel] = useState<'2d' | '3d'>('2d')
+  const [model, setModel] = useState<'2d' | 'qm' | '3d'>('2d')
   const [paused, setPaused] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [isoOpen, setIsoOpen] = useState(false)
@@ -197,6 +198,8 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
   const modelCanvas =
     model === '2d' ? (
       <Bohr2D element={el} accent={accent} speed={speed} animated={!paused} />
+    ) : model === 'qm' ? (
+      <QMViewer z={el.number} paused={paused} speed={speed} />
     ) : (
       <Bohr3D element={el} accent={accent} speed={speed} paused={paused} />
     )
@@ -260,7 +263,11 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
             </div>
           </div>
           <span className="ml-auto hidden shrink-0 font-mono text-[10px] text-zinc-500 xl:inline">
-            {model === '2d' ? 'SVG · 2D' : 'Three.js · 3D — drag to orbit · scroll to zoom'}
+            {model === '2d'
+              ? 'SVG · 2D'
+              : model === 'qm'
+                ? 'QM ψ isosurface — drag to orbit · slider cuts probability'
+                : 'Three.js · 3D — drag to orbit · scroll to zoom'}
           </span>
           <button
             type="button"
@@ -278,10 +285,12 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
           <div className="flex shrink-0 flex-col border-b border-white/10 bg-[#060a12] lg:min-h-0 lg:shrink lg:border-b-0 lg:border-r">
             <div className="relative h-[300px] overflow-hidden sm:h-[340px] lg:h-auto lg:min-h-0 lg:flex-1">
               {modelCanvas}
-              <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
-                Bohr shell model · {el.shells.length} shells · Σ
-                {el.shells.reduce((a, b) => a + b, 0)} e⁻
-              </div>
+              {model !== 'qm' && (
+                <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
+                  Bohr shell model · {el.shells.length} shells · Σ
+                  {el.shells.reduce((a, b) => a + b, 0)} e⁻
+                </div>
+              )}
             </div>
             <div className="relative z-10 shrink-0 border-t border-white/10 px-4 py-2.5">
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
