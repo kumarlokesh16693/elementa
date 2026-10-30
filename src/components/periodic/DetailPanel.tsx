@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ElementData } from '@/lib/periodic/types'
 import { CATEGORY_MAP, SHELL_LETTERS } from '@/lib/periodic/types'
 import {
@@ -13,8 +13,11 @@ import {
   usesBracketMass,
   valenceOf,
 } from '@/lib/periodic'
+import { ISOTOPES, chainsForElement } from '@/lib/periodic/isotopes'
+import { isTopModal, popModal, pushModal } from '@/lib/modalStack'
 import { Bohr2D } from './Bohr2D'
 import Bohr3D from './Bohr3D'
+import IsotopeModal from './IsotopeModal'
 
 interface DetailPanelProps {
   element: ElementData
@@ -172,15 +175,21 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
   const [model, setModel] = useState<'2d' | '3d'>('2d')
   const [paused, setPaused] = useState(false)
   const [speed, setSpeed] = useState(1)
+  const [isoOpen, setIsoOpen] = useState(false)
+  const modalId = useRef(Symbol('detail-modal'))
 
-  /* close the modal with Escape */
+  /* close the modal with Escape — only if it is the topmost overlay */
   useEffect(() => {
     if (!open) return
+    pushModal(modalId.current)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && isTopModal(modalId.current)) onClose()
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      popModal(modalId.current)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open, onClose])
 
   if (!open) return null
@@ -404,6 +413,9 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
               </div>
             </Section>
 
+            {/* isotopes & decay */}
+            <IsotopesSection el={el} accent={accent} onOpen={() => setIsoOpen(true)} />
+
             {/* discovery */}
             <Section title="Discovery & notes" accent={accent}>
               <div className="grid grid-cols-2 gap-1.5">
@@ -425,6 +437,38 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
           </div>
         </div>
       </div>
+
+      {/* isotope explorer — stacked overlay above this modal */}
+      <IsotopeModal element={el} accent={accent} open={isoOpen} onClose={() => setIsoOpen(false)} />
     </div>
+  )
+}
+
+function IsotopesSection({
+  el,
+  accent,
+  onOpen,
+}: {
+  el: ElementData
+  accent: string
+  onOpen: () => void
+}) {
+  const rows = ISOTOPES[el.number] ?? []
+  const stable = rows.filter((r) => r.abundance != null && !r.halfLife).length
+  const chains = chainsForElement(el.number)
+  return (
+    <Section title="Isotopes & decay" accent={accent}>
+      <p className="text-[11px] leading-relaxed text-zinc-400">
+        {rows.length} notable nuclides tracked · {stable} stable
+        {chains.length > 0 && ` · member of the ${chains.map((c) => c.name).join(', ')}`}
+      </p>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-[11.5px] font-medium text-amber-300 transition hover:bg-amber-400/20"
+      >
+        Open isotope explorer → isotope table & decay chains
+      </button>
+    </Section>
   )
 }

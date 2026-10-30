@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import type { CategoryKey, ColorMode } from '@/lib/periodic/types'
 import { CATEGORIES, COLOR_MODES, BLOCK_COLORS, PHASE_COLORS } from '@/lib/periodic/types'
@@ -127,6 +128,14 @@ export default function Home() {
             </option>
           ))}
         </select>
+
+        {/* MO builder */}
+        <Link
+          href="/mo"
+          className="shrink-0 rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-400/20"
+        >
+          MO builder
+        </Link>
       </header>
 
       {/* legend bar */}
