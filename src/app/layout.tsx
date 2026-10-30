@@ -13,23 +13,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PROJECT DAEDALUS — Hypersonic Reentry & GNC Flight Supervisor",
+  title: "ELEMENTA — Research-Grade Interactive Periodic Table",
   description:
-    "Real-time hypersonic reentry aerothermodynamics simulation: 3-DOF entry flight dynamics, Sutton-Graves stagnation heating, plasma blackout, GNC autopilot with bank-angle modulation, LEO deorbit / Apollo lunar return / Mars aerocapture / Mach 16 waverider missions.",
+    "Interactive periodic table of all 118 elements with animated 2D and 3D Bohr models, orbital block visualization, periodic trend charts, and reference-grade atomic, physical and discovery data.",
   keywords: [
-    "hypersonic",
-    "reentry",
-    "aerothermodynamics",
-    "GNC",
-    "trajectory simulation",
-    "aerocapture",
-    "waverider",
-    "plasma blackout",
+    "periodic table",
+    "Bohr model",
+    "3D atom",
+    "electron shells",
+    "chemistry",
+    "elements",
+    "ionization energy",
+    "electronegativity",
+    "periodic trends",
   ],
 };
 
 export const viewport: Viewport = {
-  themeColor: "#04070d",
+  themeColor: "#070a10",
   width: "device-width",
   initialScale: 1,
 };
@@ -42,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#04070d] text-zinc-200 overflow-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#070a10] text-zinc-200 overflow-hidden`}
       >
         {children}
       </body>

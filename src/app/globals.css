@@ -160,3 +160,59 @@ aside *::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, #b45309, #f59e0b);
 }
 
+/* ---------------- ELEMENTA · periodic table ---------------- */
+
+/* thin technical scrollbars (global) */
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+/* electron orbital rotation for the 2D Bohr model */
+@keyframes orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* periodic table tile sizing */
+.pt-grid {
+  --tile: 42px;
+  --tile-gap: 4px;
+}
+@media (min-width: 768px) {
+  .pt-grid {
+    --tile: 54px;
+    --tile-gap: 5px;
+  }
+}
+@media (min-width: 1536px) {
+  .pt-grid {
+    --tile: 62px;
+    --tile-gap: 6px;
+  }
+}
+
+/* native range input polish for model speed control */
+input[type='range'] {
+  accent-color: #fbbf24;
+}
+
+
