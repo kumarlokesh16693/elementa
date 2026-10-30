@@ -1,165 +1,188 @@
 'use client'
 
+import { memo } from 'react'
 import type { ElementData } from '@/lib/periodic/types'
-import { CATEGORY_MAP, SHELL_LETTERS } from '@/lib/periodic/types'
-import { neutronCount } from '@/lib/periodic'
+import { SHELL_LETTERS } from '@/lib/periodic/types'
 
 interface Bohr2DProps {
   element: ElementData
-  playing: boolean
-  speed: number
-  showLabels: boolean
+  accent: string
+  /** playback multiplier, 1 = normal */
+  speed?: number
+  animated?: boolean
 }
 
-const SIZE = 480
+const SIZE = 400
 const C = SIZE / 2
-const OUTER = 228
 
-export function Bohr2D({ element, playing, speed, showLabels }: Bohr2DProps) {
-  const color = CATEGORY_MAP[element.category].color
-  const nNeutrons = neutronCount(element)
-  const A = element.number + nNeutrons
+function shellRadii(n: number): number[] {
+  if (n === 1) return [112]
+  const minR = 64
+  const maxR = 184
+  const step = (maxR - minR) / (n - 1)
+  return Array.from({ length: n }, (_, i) => minR + i * step)
+}
 
-  const nucR = Math.min(34, Math.max(11, 9 + Math.sqrt(A) * 2.6))
-  const dotR = Math.max(1.5, Math.min(4, nucR / (Math.sqrt(A) * 1.15)))
-
-  const nucleons: { x: number; y: number; proton: boolean }[] = []
-  for (let i = 0; i < A; i++) {
-    const r = nucR * Math.sqrt((i + 0.5) / A)
-    const th = i * 2.39996 + 0.7
-    nucleons.push({
-      x: C + r * Math.cos(th),
-      y: C + r * Math.sin(th),
-      proton: i < element.number,
-    })
-  }
-
-  const S = element.shells.length
-  const inner = nucR + 18
-  const shellR = (i: number) => inner + (OUTER - inner) * ((i + 0.5) / S)
-  const valenceIdx = S - 1
-
-  const electronGroups = element.shells.map((count, i) => {
-    const r = shellR(i)
-    const electrons = Array.from({ length: count }, (_, j) => {
-      const a = (j / count) * Math.PI * 2 + i * 0.6
-      return { x: C + r * Math.cos(a), y: C + r * Math.sin(a) }
-    })
-    const duration = (4.5 * Math.pow(i + 1, 1.35)) / Math.max(0.1, speed)
-    return { r, electrons, duration, i, count }
-  })
+/**
+ * Research-style 2D Bohr model.
+ * Concentric quantized shells (K..Q), evenly distributed electrons per shell,
+ * each shell rotating as a rigid orbital group with inner shells faster
+ * (approximating v ∝ 1/n of the Bohr atom).
+ */
+export const Bohr2D = memo(function Bohr2D({
+  element,
+  accent,
+  speed = 1,
+  animated = true,
+}: Bohr2DProps) {
+  const shells = element.shells
+  const radii = shellRadii(shells.length)
+  const neutrons = Math.max(0, Math.round(element.mass) - element.number)
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2">
-      <svg
-        viewBox={`0 0 ${SIZE} ${SIZE}`}
-        className="h-full max-h-[min(58vh,480px)] w-auto max-w-full"
-        role="img"
-        aria-label={`Bohr model of ${element.name}: ${element.shells.length} shells holding ${element.shells.join(', ')} electrons`}
-      >
-        <defs>
-          <radialGradient id="nucGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={color} stopOpacity="0.55" />
-            <stop offset="55%" stopColor={color} stopOpacity="0.18" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </radialGradient>
-        </defs>
+    <svg
+      viewBox={`0 0 ${SIZE} ${SIZE}`}
+      className="h-full w-full"
+      role="img"
+      aria-label={`2D Bohr model of ${element.name}`}
+    >
+      <defs>
+        <radialGradient id="bohr2d-nucleus" cx="50%" cy="42%" r="70%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="55%" stopColor={accent} stopOpacity="0.85" />
+          <stop offset="100%" stopColor={accent} stopOpacity="0.22" />
+        </radialGradient>
+      </defs>
 
-        {/* orbit paths */}
-        {element.shells.map((count, i) => {
-          const r = shellR(i)
-          const isValence = i === valenceIdx
-          return (
-            <g key={`ring-${i}`}>
-              <circle
-                cx={C}
-                cy={C}
-                r={r}
-                fill="none"
-                stroke={isValence ? color : '#ffffff'}
-                strokeOpacity={isValence ? 0.4 : 0.09}
-                strokeWidth={isValence ? 1.4 : 1}
-                strokeDasharray={isValence ? '5 4' : undefined}
-              >
-                <title>{`${SHELL_LETTERS[i]} shell — ${count} electron${count === 1 ? '' : 's'}`}</title>
-              </circle>
-              {showLabels && (
-                <text
-                  x={C}
-                  y={C - r - 5}
-                  textAnchor="middle"
-                  className="fill-zinc-500 font-mono"
-                  style={{ fontSize: 10.5 }}
-                >
-                  {`${SHELL_LETTERS[i]} · ${count}e⁻`}
-                </text>
-              )}
-            </g>
-          )
-        })}
+      {/* quantized orbit rings */}
+      {radii.map((r, i) => (
+        <circle
+          key={`ring-${i}`}
+          cx={C}
+          cy={C}
+          r={r}
+          fill="none"
+          stroke={accent}
+          strokeOpacity={0.3}
+          strokeWidth={1}
+          strokeDasharray="3 4"
+        />
+      ))}
 
-        {/* animated electrons */}
-        {electronGroups.map(({ r, electrons, duration, i }) => (
+      {/* electrons — one rigid rotating group per shell */}
+      {shells.map((count, i) => {
+        const r = radii[i]
+        const duration = animated ? (3.4 + i * 2.1) / Math.max(speed, 0.05) : 0
+        const offset = i * 17
+        return (
           <g
-            key={`orb-${element.number}-${i}`}
-            style={{
-              animation: `orbit ${duration}s linear infinite`,
-              animationPlayState: playing ? 'running' : 'paused',
-              transformOrigin: `${C}px ${C}px`,
-            }}
+            key={`orb-${i}`}
+            style={
+              animated
+                ? {
+                    animation: `orbit ${duration.toFixed(2)}s linear infinite`,
+                    transformOrigin: '200px 200px',
+                    transformBox: 'view-box',
+                  }
+                : undefined
+            }
           >
-            <circle cx={C} cy={C} r={r} fill="none" stroke="transparent" pointerEvents="none" />
-            {electrons.map((p, j) => (
-              <circle
-                key={j}
-                cx={p.x}
-                cy={p.y}
-                r={3.4}
-                fill={color}
-                stroke="#0b0e14"
-                strokeWidth="0.8"
-              >
-                <title>{`${SHELL_LETTERS[i]} electron`}</title>
-              </circle>
-            ))}
+            {Array.from({ length: count }, (_, j) => {
+              const a = ((offset + (360 / count) * j) * Math.PI) / 180
+              const x = C + r * Math.cos(a)
+              const y = C + r * Math.sin(a)
+              return (
+                <circle
+                  key={j}
+                  cx={x.toFixed(2)}
+                  cy={y.toFixed(2)}
+                  r={3.4}
+                  fill={accent}
+                  stroke="#05080f"
+                  strokeWidth={0.6}
+                />
+              )
+            })}
           </g>
-        ))}
+        )
+      })}
 
-        {/* nucleus */}
-        <circle cx={C} cy={C} r={nucR + 14} fill="url(#nucGlow)">
-          <title>{`${element.number} protons, ${nNeutrons} neutrons (≈, most stable isotope)`}</title>
-        </circle>
-        <circle cx={C} cy={C} r={nucR} fill="#131722" stroke="#ffffff22" strokeWidth="1" />
-        {nucleons.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={dotR}
-            fill={p.proton ? color : '#8b93a3'}
-            fillOpacity={p.proton ? 0.95 : 0.8}
-          />
-        ))}
-      </svg>
+      {/* shell badges K·n */}
+      {shells.map((count, i) => {
+        const r = radii[i]
+        const label = SHELL_LETTERS[i] ?? `n${i + 1}`
+        return (
+          <g key={`badge-${i}`}>
+            <rect
+              x={C - 21}
+              y={C - r - 8}
+              width={42}
+              height={16}
+              rx={8}
+              fill="#0b1220"
+              fillOpacity={0.92}
+              stroke={accent}
+              strokeOpacity={0.45}
+              strokeWidth={1}
+            />
+            <text
+              x={C}
+              y={C - r + 4}
+              textAnchor="middle"
+              fontSize={9.5}
+              fontFamily="var(--font-geist-mono), monospace"
+              fill={accent}
+            >
+              {label}·{count}
+            </text>
+          </g>
+        )
+      })}
 
-      {/* particle legend */}
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[11px] text-zinc-400">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: color }} />
-          p⁺ {element.number}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#8b93a3]" />
-          n⁰ {nNeutrons} <span className="text-zinc-600">(≈)</span>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full border border-zinc-500" />
-          e⁻ {element.number}
-        </span>
-        <span className="text-zinc-600">
-          shells {element.shells.join(' · ')}
-        </span>
-      </div>
-    </div>
+      {/* nucleus */}
+      <circle
+        cx={C}
+        cy={C}
+        r={30}
+        fill="url(#bohr2d-nucleus)"
+        stroke={accent}
+        strokeOpacity={0.85}
+        strokeWidth={1.2}
+      />
+      <text
+        x={C}
+        y={C - 1}
+        textAnchor="middle"
+        fontSize={17}
+        fontWeight={700}
+        fill="#ffffff"
+        fontFamily="var(--font-geist-sans), sans-serif"
+      >
+        {element.symbol}
+      </text>
+      <text
+        x={C}
+        y={C + 14}
+        textAnchor="middle"
+        fontSize={8}
+        fill="#ffffff"
+        fillOpacity={0.78}
+        fontFamily="var(--font-geist-mono), monospace"
+      >
+        {element.number}p⁺ {neutrons}n⁰
+      </text>
+
+      {/* caption */}
+      <text
+        x={C}
+        y={SIZE - 6}
+        textAnchor="middle"
+        fontSize={9}
+        fill="#7d8596"
+        fontFamily="var(--font-geist-mono), monospace"
+      >
+        {`Bohr shell model · ${shells.length} shell${shells.length > 1 ? 's' : ''} · ${element.number} e⁻`}
+      </text>
+    </svg>
   )
-}
+})
