@@ -2,7 +2,16 @@
 
 import { memo } from 'react'
 import type { CategoryKey, ColorMode, ElementData } from '@/lib/periodic/types'
-import { ELEMENTS, getElement, isHeatMode, tileColor } from '@/lib/periodic'
+import {
+  ELEMENTS,
+  getElement,
+  isHeatMode,
+  ORIGIN_MAP,
+  originsFor,
+  originPct,
+  tileColor,
+} from '@/lib/periodic'
+import type { OriginKey } from '@/lib/periodic'
 
 interface PeriodicTableProps {
   selected: number
@@ -12,6 +21,8 @@ interface PeriodicTableProps {
   matches: Set<number> | null
   /** category filter; null = all visible */
   activeCategories: Set<CategoryKey> | null
+  /** origins mode: highlight elements with ≥5% of this channel; null = all */
+  originFilter: OriginKey | null
 }
 
 function shortVal(v: number | null): string {
@@ -35,11 +46,17 @@ interface TileProps {
 const Tile = memo(function Tile({ el, colorMode, dim, selected, onSelect }: TileProps) {
   const c = tileColor(el, colorMode)
   const sub = isHeatMode(colorMode) ? shortVal(el[colorMode]) : String(el.mass)
+  const origins = colorMode === 'origins' ? originsFor(el.number) : null
+  const title = origins
+    ? `${el.name} · ${el.mass} u · origin: ${origins
+        .map(([k, v]) => `~${v}% ${ORIGIN_MAP[k].label.toLowerCase()}`)
+        .join(' + ')}`
+    : `${el.name} · ${el.mass} u · ${el.config}`
   return (
     <button
       type="button"
       onClick={() => onSelect(el)}
-      title={`${el.name} · ${el.mass} u · ${el.config}`}
+      title={title}
       style={{
         gridColumn: el.xpos + 1,
         gridRow: el.ypos + 1,
@@ -57,7 +74,9 @@ const Tile = memo(function Tile({ el, colorMode, dim, selected, onSelect }: Tile
       </span>
       <span className="absolute right-1 top-1 h-1 w-1 rounded-full bg-current opacity-60 group-hover:opacity-100" style={{ display: el.radioactive ? 'block' : 'none' }} />
       <span className="text-[15px] font-bold leading-none tracking-tight">{el.symbol}</span>
-      <span className="mt-0.5 font-mono text-[7.5px] leading-none opacity-75">{sub}</span>
+      <span className="mt-0.5 font-mono text-[7.5px] leading-none opacity-75">
+        {origins ? `${ORIGIN_MAP[origins[0][0]].short} ${origins[0][1]}%` : sub}
+      </span>
     </button>
   )
 })
@@ -101,6 +120,7 @@ export default function PeriodicTable({
   colorMode,
   matches,
   activeCategories,
+  originFilter,
 }: PeriodicTableProps) {
   return (
     <div className="w-max">
@@ -150,12 +170,14 @@ export default function PeriodicTable({
         {ELEMENTS.map((el) => {
           const dimSearch = matches != null && !matches.has(el.number)
           const dimCat = activeCategories != null && !activeCategories.has(el.category)
+          const dimOrigin =
+            originFilter != null && originPct(el.number, originFilter) < 5
           return (
             <Tile
               key={el.number}
               el={el}
               colorMode={colorMode}
-              dim={dimSearch || dimCat}
+              dim={dimSearch || dimCat || dimOrigin}
               selected={selected === el.number}
               onSelect={onSelect}
             />

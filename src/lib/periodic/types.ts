@@ -86,6 +86,7 @@ export type ColorMode =
   | 'category'
   | 'block'
   | 'phase'
+  | 'origins'
   | 'electronegativity'
   | 'ionizationEnergy'
   | 'atomicRadius'
@@ -96,6 +97,7 @@ export const COLOR_MODES: { key: ColorMode; label: string }[] = [
   { key: 'category', label: 'Category' },
   { key: 'block', label: 'Orbital block' },
   { key: 'phase', label: 'Phase at STP' },
+  { key: 'origins', label: 'Nucleosynthesis origin' },
   { key: 'electronegativity', label: 'Electronegativity' },
   { key: 'ionizationEnergy', label: 'Ionization energy' },
   { key: 'atomicRadius', label: 'Atomic radius' },

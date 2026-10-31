@@ -10,6 +10,10 @@ import {
   heatT,
   hexWithAlpha,
   kelvinToC,
+  ORIGIN_FOOTNOTE,
+  ORIGIN_MAP,
+  ORIGIN_NOTES,
+  originsFor,
   usesBracketMass,
   valenceOf,
 } from '@/lib/periodic'
@@ -17,6 +21,7 @@ import { ISOTOPES, chainsForElement } from '@/lib/periodic/isotopes'
 import { isTopModal, popModal, pushModal } from '@/lib/modalStack'
 import { Bohr2D } from './Bohr2D'
 import Bohr3D from './Bohr3D'
+import GrotrianDiagram from './GrotrianDiagram'
 import IsotopeModal from './IsotopeModal'
 import QMViewer from '@/components/orbital/QMViewer'
 
@@ -100,8 +105,8 @@ function CloseIcon() {
 }
 
 interface ControlsRowProps {
-  model: '2d' | 'qm' | '3d'
-  setModel: (m: '2d' | 'qm' | '3d') => void
+  model: '2d' | 'qm' | 'spectra' | '3d'
+  setModel: (m: '2d' | 'qm' | 'spectra' | '3d') => void
   paused: boolean
   togglePaused: () => void
   speed: number
@@ -112,7 +117,7 @@ function ControlsRow({ model, setModel, paused, togglePaused, speed, setSpeed }:
   return (
     <div className="flex items-center gap-2">
       <div className="flex overflow-hidden rounded-md border border-white/10">
-        {(['2d', 'qm', '3d'] as const).map((m) => (
+        {(['2d', 'qm', 'spectra', '3d'] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -127,26 +132,35 @@ function ControlsRow({ model, setModel, paused, togglePaused, speed, setSpeed }:
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={togglePaused}
-        className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"
-      >
-        {paused ? '▶ Play' : '❚❚ Pause'}
-      </button>
-      <div className="ml-auto flex items-center gap-2">
-        <span className="font-mono text-[10px] text-zinc-500">×{speed}</span>
-        <input
-          type="range"
-          min={0.25}
-          max={3}
-          step={0.25}
-          value={speed}
-          onChange={(e) => setSpeed(parseFloat(e.target.value))}
-          className="w-24"
-          aria-label="Model animation speed"
-        />
-      </div>
+      {model !== 'spectra' && (
+        <button
+          type="button"
+          onClick={togglePaused}
+          className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"
+        >
+          {paused ? '▶ Play' : '❚❚ Pause'}
+        </button>
+      )}
+      {model !== 'spectra' && (
+        <div className="ml-auto flex items-center gap-2">
+          <span className="font-mono text-[10px] text-zinc-500">×{speed}</span>
+          <input
+            type="range"
+            min={0.25}
+            max={3}
+            step={0.25}
+            value={speed}
+            onChange={(e) => setSpeed(parseFloat(e.target.value))}
+            className="w-24"
+            aria-label="Model animation speed"
+          />
+        </div>
+      )}
+      {model === 'spectra' && (
+        <span className="ml-auto hidden font-mono text-[10px] text-zinc-600 md:inline">
+          exact Rydberg spectrum · click a line to pin
+        </span>
+      )}
     </div>
   )
 }
@@ -173,7 +187,7 @@ const SHELL_MAX = 32
  * table keeps the entire window width and every element stays visible.
  */
 export default function DetailPanel({ element: el, accent, open, onClose }: DetailPanelProps) {
-  const [model, setModel] = useState<'2d' | 'qm' | '3d'>('2d')
+  const [model, setModel] = useState<'2d' | 'qm' | 'spectra' | '3d'>('2d')
   const [paused, setPaused] = useState(false)
   const [speed, setSpeed] = useState(1)
   const [isoOpen, setIsoOpen] = useState(false)
@@ -200,6 +214,8 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
       <Bohr2D element={el} accent={accent} speed={speed} animated={!paused} />
     ) : model === 'qm' ? (
       <QMViewer z={el.number} paused={paused} speed={speed} />
+    ) : model === 'spectra' ? (
+      <GrotrianDiagram key={el.number} z={el.number} symbol={el.symbol} accent={accent} />
     ) : (
       <Bohr3D element={el} accent={accent} speed={speed} paused={paused} />
     )
@@ -267,7 +283,9 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
               ? 'SVG · 2D'
               : model === 'qm'
                 ? 'QM ψ isosurface — drag to orbit · slider cuts probability'
-                : 'Three.js · 3D — drag to orbit · scroll to zoom'}
+                : model === 'spectra'
+                  ? 'Grotrian diagram · hydrogen-like ion — hover a transition for photon data'
+                  : 'Three.js · 3D — drag to orbit · scroll to zoom'}
           </span>
           <button
             type="button"
@@ -285,7 +303,7 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
           <div className="flex shrink-0 flex-col border-b border-white/10 bg-[#060a12] lg:min-h-0 lg:shrink lg:border-b-0 lg:border-r">
             <div className="relative h-[300px] overflow-hidden sm:h-[340px] lg:h-auto lg:min-h-0 lg:flex-1">
               {modelCanvas}
-              {model !== 'qm' && (
+              {(model === '2d' || model === '3d') && (
                 <div className="absolute left-2 top-2 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 backdrop-blur-sm">
                   Bohr shell model · {el.shells.length} shells · Σ
                   {el.shells.reduce((a, b) => a + b, 0)} e⁻
@@ -425,6 +443,9 @@ export default function DetailPanel({ element: el, accent, open, onClose }: Deta
             {/* isotopes & decay */}
             <IsotopesSection el={el} accent={accent} onOpen={() => setIsoOpen(true)} />
 
+            {/* nucleosynthesis origin */}
+            <OriginsSection el={el} accent={accent} />
+
             {/* discovery */}
             <Section title="Discovery & notes" accent={accent}>
               <div className="grid grid-cols-2 gap-1.5">
@@ -484,6 +505,57 @@ function IsotopesSection({
       >
         View all nuclides of {el.symbol} in the Segrè chart →
       </a>
+    </Section>
+  )
+}
+
+function OriginsSection({ el, accent }: { el: ElementData; accent: string }) {
+  const pairs = originsFor(el.number)
+  const note = ORIGIN_NOTES[el.number]
+  const synthetic = pairs[0][0] === 'synthetic'
+  return (
+    <Section title="Nucleosynthesis origin" accent={accent}>
+      {/* stacked share bar */}
+      <div className="flex h-3.5 gap-px overflow-hidden rounded-full bg-white/5">
+        {pairs.map(([k, v]) => (
+          <div
+            key={k}
+            title={`${ORIGIN_MAP[k].label} ≈${v}%`}
+            style={{ width: `${v}%`, background: ORIGIN_MAP[k].color, opacity: 0.85 }}
+          />
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {pairs.map(([k, v]) => {
+          const m = ORIGIN_MAP[k]
+          return (
+            <div key={k}>
+              <div className="flex items-baseline gap-1.5 text-[10.5px]">
+                <span
+                  className="inline-block h-2 w-2 shrink-0 translate-y-px rounded-full"
+                  style={{ background: m.color }}
+                />
+                <span className="text-zinc-300">{m.label}</span>
+                <span className="font-mono text-zinc-500">· {m.example}</span>
+                <span className="ml-auto shrink-0 font-mono text-zinc-400">≈{v}%</span>
+              </div>
+              <p className="pl-3.5 text-[9.5px] leading-snug text-zinc-500">{m.desc}</p>
+            </div>
+          )
+        })}
+      </div>
+      {note && (
+        <p className="rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-2 py-1.5 text-[10px] leading-relaxed text-zinc-400">
+          {note}
+        </p>
+      )}
+      {synthetic && !note && (
+        <p className="rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-2 py-1.5 text-[10px] leading-relaxed text-zinc-400">
+          Every atom of {el.symbol} on Earth was made by humans — none survives from the
+          solar system's formation.
+        </p>
+      )}
+      <p className="text-[9px] leading-relaxed text-zinc-600">{ORIGIN_FOOTNOTE}</p>
     </Section>
   )
 }

@@ -11,8 +11,10 @@ import {
   searchElements,
   tileColor,
   isHeatMode,
+  ORIGINS,
   HEAT_GRADIENT_CSS,
 } from '@/lib/periodic'
+import type { OriginKey } from '@/lib/periodic'
 import PeriodicTable from '@/components/periodic/PeriodicTable'
 import DetailPanel from '@/components/periodic/DetailPanel'
 
@@ -33,6 +35,7 @@ function HomeInner() {
   const [panelOpen, setPanelOpen] = useState(hasE)
   const [colorMode, setColorMode] = useState<ColorMode>('category')
   const [activeCats, setActiveCats] = useState<Set<CategoryKey> | null>(null)
+  const [originFilter, setOriginFilter] = useState<OriginKey | null>(null)
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
 
@@ -59,7 +62,7 @@ function HomeInner() {
     })
   }
 
-  const hasFilters = activeCats != null || query.trim().length > 0
+  const hasFilters = activeCats != null || originFilter != null || query.trim().length > 0
 
   return (
     <div className="flex h-dvh flex-col bg-[#070a10]">
@@ -131,7 +134,10 @@ function HomeInner() {
         {/* color mode */}
         <select
           value={colorMode}
-          onChange={(e) => setColorMode(e.target.value as ColorMode)}
+          onChange={(e) => {
+            setColorMode(e.target.value as ColorMode)
+            setOriginFilter(null)
+          }}
           className="rounded-md border border-white/10 bg-[#0c1220] px-2 py-1.5 text-[11px] text-zinc-300 focus:outline-none"
           aria-label="Color mode"
         >
@@ -213,6 +219,30 @@ function HomeInner() {
             ))}
             <span className="shrink-0 text-[10px] text-zinc-600">· predicted phase for heaviest elements</span>
           </>
+        ) : colorMode === 'origins' ? (
+          <>
+            {ORIGINS.map((o) => {
+              const active = originFilter == null || originFilter === o.key
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setOriginFilter(originFilter === o.key ? null : o.key)}
+                  title={`${o.desc} — flagship: ${o.example}`}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition ${
+                    active ? 'border-white/20 bg-white/[0.05]' : 'border-transparent opacity-35'
+                  }`}
+                  style={{ color: active ? o.color : undefined }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: o.color }} />
+                  {o.label}
+                </button>
+              )
+            })}
+            <span className="shrink-0 text-[10px] text-zinc-600">
+              · shares of solar-system abundance · digitized from J. Johnson (SDSS 2019) · click to highlight
+            </span>
+          </>
         ) : (
           <>
             {CATEGORIES.map((cat) => {
@@ -249,6 +279,7 @@ function HomeInner() {
             type="button"
             onClick={() => {
               setActiveCats(null)
+              setOriginFilter(null)
               setQuery('')
             }}
             className="ml-auto shrink-0 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300 transition hover:bg-amber-400/20"
@@ -273,6 +304,7 @@ function HomeInner() {
             colorMode={colorMode}
             matches={matches}
             activeCategories={activeCats}
+            originFilter={colorMode === 'origins' ? originFilter : null}
           />
           <p className="mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600">
             Reference values follow IUPAC conventions — Pauling electronegativity, first ionization

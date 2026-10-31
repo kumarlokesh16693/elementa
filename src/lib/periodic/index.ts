@@ -1,5 +1,6 @@
 import type { Block, CategoryKey, ElementData, Phase } from './types'
 import { BLOCK_COLORS, CATEGORY_MAP, PHASE_COLORS } from './types'
+import { ORIGIN_MAP, originsFor } from './origins'
 import { RAW1 } from './data1'
 import { RAW2 } from './data2'
 
@@ -165,6 +166,7 @@ export interface TileColor {
 
 export function tileColor(el: ElementData, mode: string): TileColor {
   let color: string
+  if (mode === 'origins') return originTileColor(el)
   if (mode === 'category') color = CATEGORY_MAP[el.category].color
   else if (mode === 'block') color = BLOCK_COLORS[blockOf(el)]
   else if (mode === 'phase') color = PHASE_COLORS[el.phase]
@@ -176,6 +178,31 @@ export function tileColor(el: ElementData, mode: string): TileColor {
     border: hexWithAlpha(color, 0.55),
     text: color,
   }
+}
+
+/**
+ * Origins mode: the tile background is a stacked gradient whose segment widths
+ * mirror each nucleosynthesis channel's share of the element's solar-system
+ * abundance (digitized from J. Johnson's SDSS chart). Border/text follow the
+ * dominant channel. Single-channel tiles keep the subtle translucent look.
+ */
+function originTileColor(el: ElementData): TileColor {
+  const pairs = originsFor(el.number)
+  const dom = ORIGIN_MAP[pairs[0][0]].color
+  let bg: string
+  if (pairs.length === 1) {
+    bg = hexWithAlpha(dom, 0.16)
+  } else {
+    const stops: string[] = []
+    let acc = 0
+    for (const [k, v] of pairs) {
+      const c = hexWithAlpha(ORIGIN_MAP[k].color, 0.42)
+      stops.push(`${c} ${acc}% ${acc + v}%`)
+      acc += v
+    }
+    bg = `linear-gradient(90deg, ${stops.join(', ')})`
+  }
+  return { bg, border: hexWithAlpha(dom, 0.6), text: dom }
 }
 
 export function hexWithAlpha(hex: string, alpha: number): string {
@@ -191,6 +218,21 @@ export function hexWithAlpha(hex: string, alpha: number): string {
   const b = parseInt(h.slice(4, 6), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
+
+/* ---------- Origins (nucleosynthesis) re-exports ---------- */
+
+export {
+  ORIGINS,
+  ORIGIN_MAP,
+  ORIGIN_DATA,
+  ORIGIN_NOTES,
+  ORIGIN_FOOTNOTE,
+  originsFor,
+  dominantOrigin,
+  originPct,
+  originSummary,
+} from './origins'
+export type { OriginKey, OriginMeta } from './origins'
 
 /* ---------- Formatting ---------- */
 
