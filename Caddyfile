@@ -12,12 +12,18 @@
 		}
 	}
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
+	handle /api/nist-asd* {
+		rewrite * /cgi-bin/ASD/lines1.pl
+		reverse_proxy https://physics.nist.gov {
+			header_up Host physics.nist.gov
 		}
+	}
+
+	handle {
+		# app migrated Next.js → plain Vite build; `npm run build` emits ./dist
+		# (index, orbitals, mo, segre, daedalus html) — serve it statically
+		root * ./dist
+		try_files {path} {path}/index.html
+		file_server
 	}
 }

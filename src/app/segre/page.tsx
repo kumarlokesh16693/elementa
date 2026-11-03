@@ -1,15 +1,4 @@
-'use client'
-
-// Segrè chart page — chart of nuclides built on IAEA LiveChart ground states.
-// N (neutrons) on x, Z (protons) on y, colored by dominant decay mode or
-// log-half-life heat. Magic numbers, decay-path arrows, per-nuclide detail
-// panel with computed Q values and decay chains.
-
-import Link from 'next/link'
-import { Suspense, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import SegreChart, { type FocusTarget } from '@/components/segre/SegreChart'
-import NuclidePanel from '@/components/segre/NuclidePanel'
+import { h, reactive, type VNode } from 'nexus-framework'
 import {
   NUCLEI,
   STABLE_COUNT,
@@ -19,6 +8,18 @@ import {
   type Nuclide,
 } from '@/lib/periodic/nuclides'
 import { searchElements } from '@/lib/periodic'
+import '@/components/segre/segre-element'
+import '@/components/segre/bateman-element'
+import '@/components/segre/semf-element'
+import '@/components/segre/nucleosynthesis-element'
+import '@/components/segre/shielding-element'
+import { NuclidePanelNexus } from '@/components/segre/NuclidePanelNexus'
+import { ElementaLogo } from '@/components/ElementaLogo'
+import { GitHubLink } from '@/components/GitHubLink'
+
+function H(tag: any, props?: any, ...children: any[]): VNode {
+  return h(tag, props, ...children) as VNode
+}
 
 type Mode = 'decay' | 'hl'
 
@@ -32,242 +33,584 @@ const HL_TICKS: [string, number][] = [
   ['10²⁴ s', 1],
 ]
 
-export default function SegrePage() {
-  return (
-    <Suspense fallback={null}>
-      <SegreInner />
-    </Suspense>
-  )
-}
-
-function SegreInner() {
-  const params = useSearchParams()
+function getInitialParams() {
+  if (typeof window === 'undefined') {
+    return { sel: nucAt(92, 146)!, hl: null as number | null, sim: false, semf: false, astro: false, shield: false }
+  }
+  const params = new URLSearchParams(window.location.search)
   const zParam = parseInt(params.get('z') ?? '', 10)
   const nParam = parseInt(params.get('n') ?? '', 10)
+  const sim = params.get('sim') === '1' || params.get('sim') === 'true'
+  const semf = params.get('semf') === '1' || params.get('semf') === 'true' || params.get('fission') === '1'
+  const astro = params.get('astro') === '1' || params.get('astro') === 'true' || params.get('origins') === '1'
+  const shield = params.get('shield') === '1' || params.get('shield') === 'true' || params.get('shielding') === '1'
 
-  /* initial state from URL: ?z=&n= centers a nuclide; ?z= highlights an element row */
-  const init = useMemo(() => {
-    if (Number.isFinite(zParam) && Number.isFinite(nParam)) {
-      const nu = nucAt(zParam, nParam)
-      if (nu) return { sel: nu, hl: null as number | null, focus: { z: zParam, n: nParam, key: 1 } }
+  if (Number.isFinite(zParam) && Number.isFinite(nParam)) {
+    const nu = nucAt(zParam, nParam)
+    if (nu) return { sel: nu, hl: null as number | null, sim, semf, astro, shield }
+  }
+  if (Number.isFinite(zParam) && zParam >= 0) {
+    const rows = NUCLEI.filter((nu) => nu.z === zParam)
+    if (rows.length) {
+      const best =
+        rows.find((r) => r.stable) ??
+        [...rows].sort((a, b) => (b.hlSec ?? -1) - (a.hlSec ?? -1))[0]
+      return { sel: best, hl: zParam as number | null, sim, semf, astro, shield }
     }
-    if (Number.isFinite(zParam) && zParam >= 0) {
-      const rows = NUCLEI.filter((nu) => nu.z === zParam)
-      if (rows.length) {
-        const best =
-          rows.find((r) => r.stable) ??
-          [...rows].sort((a, b) => (b.hlSec ?? -1) - (a.hlSec ?? -1))[0]
-        return { sel: best, hl: zParam as number | null, focus: { z: best.z, n: best.n, key: 1 } }
-      }
+  }
+  return { sel: nucAt(92, 146)!, hl: null as number | null, sim, semf, astro, shield }
+}
+
+const init = getInitialParams()
+
+const state = reactive({
+  mode: 'decay' as Mode,
+  showMagic: true,
+  showPath: true,
+  selected: init.sel as Nuclide | null,
+  highlightZ: init.hl as number | null,
+  query: '',
+  batemanOpen: init.sim,
+  batemanNuclide: null as Nuclide | null,
+  semfOpen: init.semf,
+  semfNuclide: null as Nuclide | null,
+  astroOpen: init.astro,
+  astroNuclide: null as Nuclide | null,
+  shieldingOpen: init.shield,
+  shieldingNuclide: null as Nuclide | null,
+})
+
+function syncUrl(nu: Nuclide | null): void {
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href)
+    if (nu) {
+      url.searchParams.set('z', String(nu.z))
+      url.searchParams.set('n', String(nu.n))
+    } else {
+      url.searchParams.delete('z')
+      url.searchParams.delete('n')
     }
-    return { sel: nucAt(92, 146)!, hl: null as number | null, focus: null }
-  }, [zParam, nParam])
-
-  const [mode, setMode] = useState<Mode>('decay')
-  const [showMagic, setShowMagic] = useState(true)
-  const [showPath, setShowPath] = useState(true)
-  const [selected, setSelected] = useState<Nuclide | null>(init.sel)
-  const [highlightZ, setHighlightZ] = useState<number | null>(init.hl)
-  const [focus, setFocus] = useState<FocusTarget | null>(init.focus)
-  const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
-
-  const counts = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const nu of NUCLEI) {
-      const k = catOf(nu)
-      m.set(k, (m.get(k) ?? 0) + 1)
+    if (state.batemanOpen) {
+      url.searchParams.set('sim', '1')
+    } else {
+      url.searchParams.delete('sim')
     }
-    return m
-  }, [])
+    if (state.semfOpen) {
+      url.searchParams.set('semf', '1')
+    } else {
+      url.searchParams.delete('semf')
+    }
+    if (state.astroOpen) {
+      url.searchParams.set('astro', '1')
+    } else {
+      url.searchParams.delete('astro')
+    }
+    if (state.shieldingOpen) {
+      url.searchParams.set('shield', '1')
+    } else {
+      url.searchParams.delete('shield')
+    }
+    window.history.replaceState(null, '', url.toString())
+  }
+}
 
-  const results = useMemo(() => searchElements(query), [query])
+function showElement(z: number): void {
+  const rows = NUCLEI.filter((nu) => nu.z === z)
+  if (!rows.length) return
+  const best =
+    rows.find((r) => r.stable) ??
+    [...rows].sort((a, b) => (b.hlSec ?? -1) - (a.hlSec ?? -1))[0]
+  state.highlightZ = z
+  state.selected = best
+  syncUrl(best)
+  const chartEl = document.querySelector('elementa-segre-canvas') as any
+  chartEl?.centerOn?.(best.z, best.n)
+}
 
-  /** select & center an element's most notable nuclide (stable first, then longest-lived) */
-  const showElement = (z: number) => {
-    const rows = NUCLEI.filter((nu) => nu.z === z)
-    if (!rows.length) return
-    const best =
-      rows.find((r) => r.stable) ??
-      [...rows].sort((a, b) => (b.hlSec ?? -1) - (a.hlSec ?? -1))[0]
-    setHighlightZ(z)
-    setSelected(best)
-    setFocus({ z: best.z, n: best.n, key: Date.now() })
+function selectNuclide(nu: Nuclide | null): void {
+  state.selected = nu
+  syncUrl(nu)
+  if (nu) {
+    const chartEl = document.querySelector('elementa-segre-canvas') as any
+    chartEl?.centerOn?.(nu.z, nu.n)
+  }
+}
+
+export default function SegrePage(): VNode {
+  const results = searchElements(state.query)
+  const sel = state.selected
+
+  // Count categories
+  const counts = new Map<string, number>()
+  for (const nu of NUCLEI) {
+    const k = catOf(nu)
+    counts.set(k, (counts.get(k) ?? 0) + 1)
   }
 
-  const onSelect = (nu: Nuclide | null) => {
-    setSelected(nu)
-  }
+  return H(
+    'div',
+    {
+      class: 'flex h-dvh flex-col bg-[#070a10]',
+      onselectnuclide: (e: CustomEvent) => {
+        selectNuclide(e.detail.nuclide)
+      },
+      onclosebateman: () => {
+        state.batemanOpen = false
+        state.batemanNuclide = null
+        syncUrl(state.selected)
+      },
+      onselectbatemannuclide: (e: CustomEvent) => {
+        selectNuclide(e.detail.nuclide)
+      },
+      onclosesemf: () => {
+        state.semfOpen = false
+        state.semfNuclide = null
+        syncUrl(state.selected)
+      },
+      onselectsemfnuclide: (e: CustomEvent) => {
+        selectNuclide(e.detail.nuclide)
+      },
+      onclosenucleosynthesis: () => {
+        state.astroOpen = false
+        state.astroNuclide = null
+        syncUrl(state.selected)
+      },
+      onselectnucleosynthesisnuclide: (e: CustomEvent) => {
+        selectNuclide(e.detail.nuclide)
+      },
+    },
+    // Header
+    H(
+      'header',
+      {
+        class:
+          'relative z-20 flex h-14 shrink-0 items-center gap-4 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur',
+      },
+      H(
+        'a',
+        {
+          href: './index.html',
+          class:
+            'shrink-0 rounded-md border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200',
+        },
+        '← Periodic table',
+      ),
+      H(
+        'div',
+        { class: 'flex items-center gap-2' },
+        ElementaLogo({ size: 26 }),
+        H(
+          'h1',
+          { class: 'text-[15px] font-bold tracking-[0.2em] text-zinc-100' },
+          'SEGR',
+          H('span', { class: 'text-amber-400' }, 'È'),
+          ' CHART',
+        ),
+      ),
+      H(
+        'span',
+        { class: 'hidden font-mono text-[10px] text-zinc-500 md:inline' },
+        `chart of nuclides · ${NUCLEI.length.toLocaleString()} ground states · ${STABLE_COUNT} stable · IAEA LiveChart / ENSDF`,
+      ),
+      H(
+        'a',
+        {
+          href: './orbitals.html',
+          class:
+            'ml-auto shrink-0 rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20',
+        },
+        'Orbital lab',
+      ),
+      GitHubLink(),
+    ),
 
-  const selectFromPanel = (nu: Nuclide) => {
-    setSelected(nu)
-    setFocus({ z: nu.z, n: nu.n, key: Date.now() })
-  }
+    // Toolbar
+    H(
+      'div',
+      {
+        class:
+          'relative z-10 flex h-11 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4',
+      },
+      // Mode selector
+      H(
+        'div',
+        { class: 'flex shrink-0 rounded-md border border-white/10 p-0.5' },
+        H(
+          'button',
+          {
+            type: 'button',
+            onclick: () => {
+              state.mode = 'decay'
+            },
+            class: `rounded px-2.5 py-1 text-[11px] font-medium transition ${
+              state.mode === 'decay' ? 'bg-amber-400/15 text-amber-300' : 'text-zinc-400 hover:text-zinc-200'
+            }`,
+          },
+          'Decay mode',
+        ),
+        H(
+          'button',
+          {
+            type: 'button',
+            onclick: () => {
+              state.mode = 'hl'
+            },
+            class: `rounded px-2.5 py-1 text-[11px] font-medium transition ${
+              state.mode === 'hl' ? 'bg-amber-400/15 text-amber-300' : 'text-zinc-400 hover:text-zinc-200'
+            }`,
+          },
+          'Half-life',
+        ),
+      ),
 
-  return (
-    <div className="flex h-dvh flex-col bg-[#070a10]">
-      {/* header */}
-      <header className="relative z-20 flex h-14 shrink-0 items-center gap-4 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur">
-        <Link
-          href="/"
-          className="shrink-0 rounded-md border border-white/10 px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200"
-        >
-          ← Periodic table
-        </Link>
-        <h1 className="text-[15px] font-bold tracking-[0.2em] text-zinc-100">
-          SEGR<span className="text-amber-400">È</span> CHART
-        </h1>
-        <span className="hidden font-mono text-[10px] text-zinc-500 md:inline">
-          chart of nuclides · {NUCLEI.length.toLocaleString()} ground states · {STABLE_COUNT} stable ·
-          IAEA LiveChart / ENSDF
-        </span>
-        <Link
-          href="/orbitals"
-          className="ml-auto shrink-0 rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20"
-        >
-          Orbital lab
-        </Link>
-      </header>
+      // Magic toggle
+      H(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            state.showMagic = !state.showMagic
+          },
+          class: `shrink-0 rounded-md border px-2.5 py-1 text-[11px] transition ${
+            state.showMagic
+              ? 'border-amber-400/50 bg-amber-400/10 text-amber-300'
+              : 'border-white/10 text-zinc-400 hover:border-white/20'
+          }`,
+        },
+        'Magic numbers',
+      ),
 
-      {/* toolbar */}
-      <div className="relative z-10 flex h-11 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4">
-        <div className="flex shrink-0 rounded-md border border-white/10 p-0.5">
-          {(
-            [
-              ['decay', 'Decay mode'],
-              ['hl', 'Half-life'],
-            ] as [Mode, string][]
-          ).map(([m, label]) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`rounded px-2.5 py-1 text-[11px] font-medium transition ${
-                mode === m ? 'bg-amber-400/15 text-amber-300' : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      // Decay arrows toggle
+      H(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            state.showPath = !state.showPath
+          },
+          class: `shrink-0 rounded-md border px-2.5 py-1 text-[11px] transition ${
+            state.showPath
+              ? 'border-amber-400/50 bg-amber-400/10 text-amber-300'
+              : 'border-white/10 text-zinc-400 hover:border-white/20'
+          }`,
+        },
+        'Decay arrows',
+      ),
 
-        <button
-          type="button"
-          onClick={() => setShowMagic((v) => !v)}
-          className={`shrink-0 rounded-md border px-2.5 py-1 text-[11px] transition ${
-            showMagic
-              ? 'border-white/30 bg-white/10 text-zinc-100'
-              : 'border-white/10 text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          Magic numbers
-        </button>
+      // Bateman simulator toolbar launcher
+      H(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            state.batemanOpen = true
+            state.batemanNuclide = state.selected
+            syncUrl(state.selected)
+          },
+          class: `flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
+            state.batemanOpen
+              ? 'border-amber-400/70 bg-amber-400/20 text-amber-200'
+              : 'border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20'
+          }`,
+        },
+        H('span', null, '⏱ Bateman Simulator'),
+        H(
+          'span',
+          {
+            class:
+              'rounded bg-amber-400/20 px-1 py-0.2 font-mono text-[9px] uppercase tracking-wider text-amber-300',
+          },
+          'Interactive',
+        ),
+      ),
 
-        {/* element search */}
-        <div className="relative ml-auto w-44 shrink-0 sm:w-56">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 120)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setQuery('')
-              if (e.key === 'Enter' && results.length > 0) {
-                showElement(results[0].number)
-                setQuery('')
-              }
-            }}
-            placeholder="Highlight element…"
-            className="w-full rounded-md border border-white/10 bg-[#0c1220] px-3 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none"
-          />
-          {focused && query.trim() && results.length > 0 && (
-            <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-md border border-white/10 bg-[#0c1220] shadow-2xl">
-              {results.slice(0, 8).map((el) => (
-                <button
-                  key={el.number}
-                  type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-zinc-300 hover:bg-white/5"
-                  onMouseDown={() => {
-                    showElement(el.number)
-                    setQuery('')
-                  }}
-                >
-                  <span className="font-mono text-[10px] text-zinc-500">{el.number}</span>
-                  <span className="font-semibold">{el.symbol}</span>
-                  <span className="text-zinc-400">{el.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      // Liquid-Drop SEMF & Fission toolbar launcher
+      H(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            state.semfOpen = true
+            state.semfNuclide = state.selected
+            syncUrl(state.selected)
+          },
+          class: `flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
+            state.semfOpen
+              ? 'border-teal-400/70 bg-teal-400/20 text-teal-200'
+              : 'border-teal-400/40 bg-teal-400/10 text-teal-300 hover:bg-teal-400/20'
+          }`,
+        },
+        H('span', null, '🔬 SEMF & Fission'),
+        H(
+          'span',
+          {
+            class:
+              'rounded bg-teal-400/20 px-1 py-0.2 font-mono text-[9px] uppercase tracking-wider text-teal-300',
+          },
+          'Liquid-Drop',
+        ),
+      ),
 
-      {/* legend */}
-      <div className="flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4">
-        {mode === 'decay' ? (
-          CATS.map((c) => (
-            <span
-              key={c.key}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[10px] text-zinc-400"
-            >
-              <span className="h-2.5 w-2.5 rounded-[2px]" style={{ background: c.color }} />
-              {c.label}
-              <span className="text-zinc-600">{counts.get(c.key) ?? 0}</span>
-            </span>
-          ))
-        ) : (
-          <div className="flex w-full min-w-[320px] items-center gap-3">
-            <span className="shrink-0 text-[10px] uppercase tracking-wider text-zinc-500">
-              log₁₀ t½
-            </span>
-            <div className="relative h-2.5 flex-1 rounded-full bg-gradient-to-r from-[#440154] via-[#21918c] to-[#fde725]">
-              {HL_TICKS.map(([label, pos]) => (
-                <span
-                  key={label}
-                  className="absolute top-3.5 -translate-x-1/2 font-mono text-[9px] text-zinc-500"
-                  style={{ left: `${pos * 100}%` }}
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-            <span className="shrink-0 font-mono text-[10px] text-zinc-400">
-              ▦ stable <span className="text-zinc-600">· ? unbound</span>
-            </span>
-          </div>
-        )}
-      </div>
+      // Stellar Nucleosynthesis toolbar launcher
+      H(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            state.astroOpen = true
+            state.astroNuclide = state.selected
+            syncUrl(state.selected)
+          },
+          class: `flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition cursor-pointer ${
+            state.astroOpen
+              ? 'border-purple-400/70 bg-purple-400/20 text-purple-200'
+              : 'border-purple-400/40 bg-purple-400/10 text-purple-300 hover:bg-purple-400/20'
+          }`,
+        },
+        H('span', null, '✦ Cosmic Origins'),
+        H(
+          'span',
+          {
+            class:
+              'rounded bg-purple-400/20 px-1 py-0.2 font-mono text-[9px] uppercase tracking-wider text-purple-300',
+          },
+          'Astrophysics',
+        ),
+      ),
 
-      {/* chart + detail panel */}
-      <main className="relative min-h-0 flex-1">
-        <SegreChart
-          mode={mode}
-          showMagic={showMagic}
-          showPath={showPath}
-          selected={selected}
-          onSelect={onSelect}
-          highlightZ={highlightZ}
-          focus={focus}
-        />
-        {selected && (
-          <div className="pointer-events-none absolute inset-0 z-30 flex items-end justify-start md:items-stretch md:justify-end">
-            <NuclidePanel
-              nuc={selected}
-              showPath={showPath}
-              onTogglePath={() => setShowPath((v) => !v)}
-              onClose={() => setSelected(null)}
-              onSelect={selectFromPanel}
-            />
-          </div>
-        )}
-        {/* hint when nothing selected */}
-        {!selected && (
-          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-md border border-white/10 bg-[#0d1322]/85 px-3 py-1.5 font-mono text-[10px] text-zinc-500 backdrop-blur">
-            click any nuclide · drag to pan · scroll to zoom
-          </div>
-        )}
-      </main>
-    </div>
+      // Radiation Shielding toolbar launcher
+      H(
+        'button',
+        {
+          type: 'button',
+          onclick: () => {
+            state.shieldingOpen = true
+            state.shieldingNuclide = state.selected
+            syncUrl(state.selected)
+          },
+          class: `flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-medium transition cursor-pointer ${
+            state.shieldingOpen
+              ? 'border-cyan-400/70 bg-cyan-400/20 text-cyan-200'
+              : 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300 hover:bg-cyan-400/20'
+          }`,
+        },
+        H('span', null, '🛡️ Radiation Shielding'),
+        H(
+          'span',
+          {
+            class:
+              'rounded bg-cyan-400/20 px-1 py-0.2 font-mono text-[9px] uppercase tracking-wider text-cyan-300',
+          },
+          'ALARA',
+        ),
+      ),
+
+      // Element search
+      H(
+        'div',
+        { class: 'relative ml-auto shrink-0' },
+        H('input', {
+          type: 'text',
+          value: state.query,
+          placeholder: 'Find element (e.g. U, 92, gold)…',
+          oninput: (e: Event) => {
+            state.query = (e.target as HTMLInputElement).value
+          },
+          class:
+            'h-7 w-48 rounded-md border border-white/10 bg-[#0c1220] px-2.5 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none sm:w-60',
+        }),
+        state.query.trim() && results.length > 0
+          ? H(
+              'div',
+              {
+                class:
+                  'absolute right-0 top-full z-30 mt-1 max-h-60 w-60 overflow-y-auto rounded-md border border-white/15 bg-[#0a0f18] p-1 shadow-2xl backdrop-blur',
+              },
+              ...results.slice(0, 10).map((el) =>
+                H(
+                  'button',
+                  {
+                    key: el.number,
+                    type: 'button',
+                    onclick: () => {
+                      showElement(el.number)
+                      state.query = ''
+                    },
+                    class:
+                      'flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-[11px] text-zinc-300 hover:bg-white/10',
+                  },
+                  H('span', null, `${el.number} · ${el.symbol} — ${el.name}`),
+                  H('span', { class: 'text-zinc-500' }, el.category),
+                ),
+              ),
+            )
+          : null,
+      ),
+    ),
+
+    // Legend
+    H(
+      'div',
+      {
+        class:
+          'relative z-10 flex shrink-0 items-center gap-3 overflow-x-auto border-b border-white/5 bg-[#060910] px-4 py-1 text-[10.5px]',
+      },
+      state.mode === 'decay'
+        ? H(
+            'div',
+            { class: 'flex flex-wrap items-center gap-x-3 gap-y-1' },
+            ...CATS.map((c) =>
+              H(
+                'span',
+                { key: c.key, class: 'flex items-center gap-1.5' },
+                H('span', {
+                  class: 'h-2 w-2 rounded-sm',
+                  style: { background: c.color },
+                }),
+                H('span', { class: 'text-zinc-400' }, c.label),
+                H(
+                  'span',
+                  { class: 'font-mono text-[9px] text-zinc-600' },
+                  counts.get(c.key) ?? 0,
+                ),
+              ),
+            ),
+          )
+        : H(
+            'div',
+            { class: 'flex items-center gap-2 font-mono text-[9.5px] text-zinc-400' },
+            H('span', null, 'log T½:'),
+            H('div', {
+              class: 'h-2.5 w-56 rounded-sm border border-white/10',
+              style: {
+                background:
+                  'linear-gradient(to right, #450a0a, #991b1b, #d97706, #eab308, #22c55e, #06b6d4, #3b82f6, #1e3a8a)',
+              },
+            }),
+            ...HL_TICKS.map(([label]) => H('span', { key: label }, label)),
+            H('span', { class: 'ml-2 flex items-center gap-1' }, [
+              H('span', { class: 'inline-block h-2 w-2 rounded-sm border border-white bg-black' }),
+              H('span', null, 'stable (white outline)'),
+            ]),
+          ),
+    ),
+
+    // Chart canvas and side panel
+    H(
+      'div',
+      {
+        class: 'relative flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row',
+      },
+      H(
+        'div',
+        { class: 'relative min-h-0 flex-1' },
+        H('elementa-segre-canvas', {
+          'data-mode': state.mode,
+          'data-magic': String(state.showMagic),
+          'data-path': String(state.showPath),
+          'data-highlight-z': state.highlightZ != null ? String(state.highlightZ) : '',
+          'data-selected-z': sel ? String(sel.z) : '',
+          'data-selected-n': sel ? String(sel.n) : '',
+        }),
+      ),
+      sel
+        ? NuclidePanelNexus({
+            nuc: sel,
+            showPath: state.showPath,
+            onTogglePath: () => {
+              state.showPath = !state.showPath
+            },
+            onClose: () => {
+              state.selected = null
+              syncUrl(null)
+            },
+            onSelect: (nu) => selectNuclide(nu),
+            onOpenBateman: (nu) => {
+              state.batemanNuclide = nu
+              state.batemanOpen = true
+              syncUrl(nu)
+            },
+            onOpenSemf: (nu) => {
+              state.semfNuclide = nu
+              state.semfOpen = true
+              syncUrl(nu)
+            },
+            onOpenAstro: (nu) => {
+              state.astroNuclide = nu
+              state.astroOpen = true
+              syncUrl(nu)
+            },
+            onOpenShielding: (nu) => {
+              state.shieldingNuclide = nu
+              state.shieldingOpen = true
+              syncUrl(nu)
+            },
+          })
+        : null,
+    ),
+
+    // Bateman Simulator Modal
+    state.batemanOpen
+      ? H('elementa-bateman-modal', {
+          'data-z': String(state.batemanNuclide?.z ?? sel?.z ?? 56),
+          'data-n': String(state.batemanNuclide?.n ?? sel?.n ?? 84),
+          onclosebateman: () => {
+            state.batemanOpen = false
+            state.batemanNuclide = null
+            syncUrl(state.selected)
+          },
+          onselectbatemannuclide: (e: CustomEvent) => {
+            selectNuclide(e.detail.nuclide)
+          },
+        })
+      : null,
+
+    // Liquid-Drop SEMF & Fission Modal
+    state.semfOpen
+      ? H('elementa-semf-modal', {
+          'data-z': String(state.semfNuclide?.z ?? sel?.z ?? 92),
+          'data-n': String(state.semfNuclide?.n ?? sel?.n ?? 143),
+          onclosesemf: () => {
+            state.semfOpen = false
+            state.semfNuclide = null
+            syncUrl(state.selected)
+          },
+          onselectsemfnuclide: (e: CustomEvent) => {
+            selectNuclide(e.detail.nuclide)
+          },
+        })
+      : null,
+
+    // Stellar Nucleosynthesis & Cosmic Origins Modal
+    state.astroOpen
+      ? H('elementa-nucleosynthesis-modal', {
+          'data-z': String(state.astroNuclide?.z ?? sel?.z ?? 26),
+          'data-n': String(state.astroNuclide?.n ?? sel?.n ?? 30),
+          onclosenucleosynthesis: () => {
+            state.astroOpen = false
+            state.astroNuclide = null
+            syncUrl(state.selected)
+          },
+          onselectnucleosynthesisnuclide: (e: CustomEvent) => {
+            selectNuclide(e.detail.nuclide)
+          },
+        })
+      : null,
+
+    // Radiation Shielding & Particle Attenuation Modal
+    state.shieldingOpen
+      ? H('elementa-shielding-modal', {
+          'data-z': String(state.shieldingNuclide?.z ?? sel?.z ?? 55),
+          'data-n': String(state.shieldingNuclide?.n ?? sel?.n ?? 82),
+          oncloseshielding: () => {
+            state.shieldingOpen = false
+            state.shieldingNuclide = null
+            syncUrl(state.selected)
+          },
+          onselectshieldingnuclide: (e: CustomEvent) => {
+            selectNuclide(e.detail.nuclide)
+          },
+        })
+      : null,
   )
 }

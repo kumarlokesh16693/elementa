@@ -1,29 +1,92 @@
-<?xml version="1.0" encoding="utf-8"?>
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 30 30" style="enable-background:new 0 0 30 30;" xml:space="preserve">
-<defs>
-  <style type="text/css">
-    .st194{fill:#2D2D2D;stroke:#FFFFFF;stroke-width:0.6317;stroke-miterlimit:10;}
-    .st23{fill:#FFFFFF;}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="elem-bg" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#0e1726" />
+      <stop offset="60%" stop-color="#070a12" />
+      <stop offset="100%" stop-color="#030508" />
+    </radialGradient>
 
-    .z-breathe {
-      animation: breathe 2.5s ease-in-out infinite;
-    }
+    <!-- Core Nucleus Glow -->
+    <radialGradient id="elem-core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#fef08a" />
+      <stop offset="60%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" stop-opacity="0" />
+    </radialGradient>
 
-    @keyframes breathe {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
-    }
-  </style>
-</defs>
+    <!-- Ring 1 (Amber / Gold Quantum Phase +psi) -->
+    <linearGradient id="elem-amber-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
 
-<g>
-  <path class="st194" d="M24.51,28.51H5.49c-2.21,0-4-1.79-4-4V5.49c0-2.21,1.79-4,4-4h19.03c2.21,0,4,1.79,4,4v19.03
-    C28.51,26.72,26.72,28.51,24.51,28.51z"/>
-  <g class="z-breathe">
-    <path class="st23" d="M15.47,7.1l-1.3,1.85c-0.2,0.29-0.54,0.47-0.9,0.47h-7.1V7.09C6.16,7.1,15.47,7.1,15.47,7.1z"/>
-    <polygon class="st23" points="24.3,7.1 13.14,22.91 5.7,22.91 16.86,7.1"/>
-    <path class="st23" d="M14.53,22.91l1.31-1.86c0.2-0.29,0.54-0.47,0.9-0.47h7.09v2.33H14.53z"/>
+    <!-- Ring 2 (Cyan / Sky Quantum Phase -psi) -->
+    <linearGradient id="elem-cyan-grad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e0f2fe" />
+      <stop offset="50%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <!-- Ring 3 (Equatorial Purple / Cosmic Origin) -->
+    <linearGradient id="elem-purple-grad" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="50%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+
+    <!-- Drop Shadow / Glow Filter -->
+    <filter id="elem-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Hexagon / Shield Container -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#elem-bg)" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.35" />
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="none" stroke="#fbbf24" stroke-width="0.8" stroke-opacity="0.2" />
+
+  <!-- Outer Orbital Energy Grid Marks -->
+  <circle cx="64" cy="64" r="52" fill="none" stroke="#ffffff" stroke-width="0.75" stroke-opacity="0.08" stroke-dasharray="4,6" />
+  <circle cx="64" cy="64" r="40" fill="none" stroke="#ffffff" stroke-width="0.75" stroke-opacity="0.06" stroke-dasharray="2,4" />
+
+  <!-- Orbital 1: Cyan Orbit (-45 deg tilt) -->
+  <g transform="rotate(-45 64 64)" filter="url(#elem-glow)">
+    <ellipse cx="64" cy="64" rx="46" ry="17" fill="none" stroke="url(#elem-cyan-grad)" stroke-width="2.6" stroke-linecap="round" />
+    <!-- Electron particle node -->
+    <circle cx="110" cy="64" r="3.5" fill="#38bdf8" />
+    <circle cx="110" cy="64" r="1.5" fill="#ffffff" />
   </g>
-</g>
+
+  <!-- Orbital 2: Amber Orbit (+45 deg tilt) -->
+  <g transform="rotate(45 64 64)" filter="url(#elem-glow)">
+    <ellipse cx="64" cy="64" rx="46" ry="17" fill="none" stroke="url(#elem-amber-grad)" stroke-width="2.6" stroke-linecap="round" />
+    <!-- Electron particle node -->
+    <circle cx="18" cy="64" r="3.5" fill="#f59e0b" />
+    <circle cx="18" cy="64" r="1.5" fill="#ffffff" />
+  </g>
+
+  <!-- Orbital 3: Horizontal Equatorial Orbit (0 deg tilt) -->
+  <g filter="url(#elem-glow)">
+    <ellipse cx="64" cy="64" rx="48" ry="14" fill="none" stroke="url(#elem-purple-grad)" stroke-width="2.2" stroke-dasharray="14 4" stroke-opacity="0.85" />
+    <!-- Electron particle node -->
+    <circle cx="64" cy="78" r="3" fill="#818cf8" />
+    <circle cx="64" cy="78" r="1.2" fill="#ffffff" />
+  </g>
+
+  <!-- Radiant Core Nucleus Glow -->
+  <circle cx="64" cy="64" r="16" fill="url(#elem-core)" opacity="0.6" filter="url(#elem-glow)" />
+
+  <!-- Central Nucleus & Styled Atomic Emblem -->
+  <circle cx="64" cy="64" r="8.5" fill="#ffffff" />
+  <circle cx="64" cy="64" r="6" fill="#f59e0b" />
+  <circle cx="64" cy="64" r="3" fill="#ffffff" />
+
+  <!-- Subtle 'E' quantum node alignment in core -->
+  <path d="M 61 58.5 L 67 58.5 M 61 64 L 66 64 M 61 69.5 L 67 69.5 M 61 58.5 L 61 69.5" 
+        stroke="#0c1220" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
 </svg>

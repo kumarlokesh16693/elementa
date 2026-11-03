@@ -1,6 +1,7 @@
 import type { Block, CategoryKey, ElementData, Phase } from './types'
 import { BLOCK_COLORS, CATEGORY_MAP, PHASE_COLORS } from './types'
 import { ORIGIN_MAP, originsFor } from './origins'
+import { paletteColor, paletteGradientCss, type PaletteId } from '../palette'
 import { RAW1 } from './data1'
 import { RAW2 } from './data2'
 
@@ -105,24 +106,7 @@ const HEAT_RANGES: Record<HeatField, [number, number]> = {
   meltingPoint: [0.95, 3695],
 }
 
-const HEAT_STOPS: [number, number, number][] = [
-  [38, 70, 83], // teal-ish dark
-  [42, 157, 143], // teal
-  [233, 196, 106], // sand
-  [244, 162, 97], // orange
-  [231, 111, 81], // red-orange
-]
-
-function heatColor(t: number): string {
-  const clamped = Math.min(1, Math.max(0, t))
-  const scaled = clamped * (HEAT_STOPS.length - 1)
-  const i = Math.min(HEAT_STOPS.length - 2, Math.floor(scaled))
-  const local = scaled - i
-  const a = HEAT_STOPS[i]
-  const b = HEAT_STOPS[i + 1]
-  const mix = (x: number, y: number) => Math.round(x + (y - x) * local)
-  return `rgb(${mix(a[0], b[0])}, ${mix(a[1], b[1])}, ${mix(a[2], b[2])})`
-}
+/* Colour ramps live in ../palette so the legend and the tiles always agree. */
 
 /** Normalized 0-1 position of an element's value within the field's reference range (log for density) */
 export function heatT(el: ElementData, field: HeatField): number | null {
@@ -136,15 +120,19 @@ export function heatT(el: ElementData, field: HeatField): number | null {
   return Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : null
 }
 
-export function heatForField(el: ElementData, field: HeatField): string {
+export function heatForField(el: ElementData, field: HeatField, palette: PaletteId = 'default'): string {
   const t = heatT(el, field)
   if (t == null) return '#3f4652'
-  return heatColor(t)
+  return paletteColor(t, palette)
 }
 
-/** CSS gradient matching the 5-stop heat ramp, for legend bars */
-export const HEAT_GRADIENT_CSS =
-  'linear-gradient(90deg, rgb(38,70,83), rgb(42,157,143), rgb(233,196,106), rgb(244,162,97), rgb(231,111,81))'
+/** CSS gradient matching the active heat ramp, for legend bars */
+export function heatGradientCss(palette: PaletteId = 'default'): string {
+  return paletteGradientCss(palette)
+}
+
+/** Default-ramp gradient kept for callers that do not expose a palette switch. */
+export const HEAT_GRADIENT_CSS = paletteGradientCss('default')
 
 export function heatLegend(field: HeatField): { lo: number; hi: number; unit: string } {
   const [lo, hi] = HEAT_RANGES[field]
@@ -164,13 +152,13 @@ export interface TileColor {
   text: string
 }
 
-export function tileColor(el: ElementData, mode: string): TileColor {
+export function tileColor(el: ElementData, mode: string, palette: PaletteId = 'default'): TileColor {
   let color: string
   if (mode === 'origins') return originTileColor(el)
   if (mode === 'category') color = CATEGORY_MAP[el.category].color
   else if (mode === 'block') color = BLOCK_COLORS[blockOf(el)]
   else if (mode === 'phase') color = PHASE_COLORS[el.phase]
-  else if (isHeatMode(mode)) color = heatForField(el, mode)
+  else if (isHeatMode(mode)) color = heatForField(el, mode, palette)
   else color = CATEGORY_MAP[el.category].color
 
   return {

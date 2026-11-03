@@ -19,6 +19,11 @@ node_modules
 
 # production
 /build
+/dist/
+dist/
+dev.pid
+work/
+*.png
 
 # misc
 .DS_Store

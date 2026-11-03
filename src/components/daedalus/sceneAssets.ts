@@ -1,13 +1,32 @@
 /* ============================================================
-   PROJECT DAEDALUS — three.js scene assets
+   PROJECT DAEDALUS — @nexus/3d scene assets
    Procedural planet shader (simplex-noise continents, terminator,
    polar caps), atmosphere rim shell, vehicle geometry builders,
-   plasma glow sprite texture.
+   plasma glow texture.
+
+   Ported from three.js to the zero-dependency @nexus/3d engine:
+   • ShaderMaterial passes source through verbatim, so each shader
+     declares its own attributes (aPosition/aNormal) and precision,
+     and uses engine builtins (uModelMatrix, uViewMatrix,
+     uProjectionMatrix, uCameraPosition) instead of three's.
+   • three's LatheGeometry → procedural indexed lathe.
+   • three's ConvexGeometry → brute-force convex hull (8 points).
+   • glow Sprite → camera-facing textured quad (the engine's
+     WebGLRenderer has no Sprite draw path).
    ============================================================ */
 
-import * as THREE from 'three'
-import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
-import type { PlanetId } from '@/lib/sim/constants'
+import {
+  BufferGeometry,
+  Color,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  Points,
+  ShaderMaterial,
+  SphereGeometry,
+  Texture,
+} from '@nexus/3d';
+import type { PlanetId } from '@/lib/sim/constants';
 
 /* ---------------- shared GLSL: simplex noise + fbm ---------------- */
 
@@ -68,14 +87,14 @@ float fbm(vec3 p){
 /* ---------------- planet surface material ---------------- */
 
 export interface PlanetUniforms {
-  uSunDir: { value: THREE.Vector3 }
+  uSunDir: { value: number[] }
   uTime: { value: number }
-  uOceanDeep: { value: THREE.Color }
-  uOceanShallow: { value: THREE.Color }
-  uLandLow: { value: THREE.Color }
-  uLandHigh: { value: THREE.Color }
-  uIce: { value: THREE.Color }
-  uAtmo: { value: THREE.Color }
+  uOceanDeep: { value: number[] }
+  uOceanShallow: { value: number[] }
+  uLandLow: { value: number[] }
+  uLandHigh: { value: number[] }
+  uIce: { value: number[] }
+  uAtmo: { value: number[] }
   uHasOcean: { value: number }
 }
 
@@ -103,35 +122,50 @@ const PLANET_SKINS: Record<
   },
 }
 
+/* ShaderMaterial uniform values are dispatched as plain number arrays
+   (the engine's typed uniform writer accepts number[], not {r,g,b} objects) */
+function rgb(hex: string): number[] {
+  const c = new Color(hex)
+  return [c.r, c.g, c.b]
+}
+
 export function createPlanetUniforms(planet: PlanetId): PlanetUniforms {
   const s = PLANET_SKINS[planet]
   return {
-    uSunDir: { value: new THREE.Vector3(1, 0.32, 0.5).normalize() },
+    uSunDir: { value: [0.767, 0.245, 0.384] }, // (1, 0.32, 0.5).normalize()
     uTime: { value: 0 },
-    uOceanDeep: { value: new THREE.Color(s.deep) },
-    uOceanShallow: { value: new THREE.Color(s.shallow) },
-    uLandLow: { value: new THREE.Color(s.low) },
-    uLandHigh: { value: new THREE.Color(s.high) },
-    uIce: { value: new THREE.Color(s.ice) },
-    uAtmo: { value: new THREE.Color(s.atmo) },
+    uOceanDeep: { value: rgb(s.deep) },
+    uOceanShallow: { value: rgb(s.shallow) },
+    uLandLow: { value: rgb(s.low) },
+    uLandHigh: { value: rgb(s.high) },
+    uIce: { value: rgb(s.ice) },
+    uAtmo: { value: rgb(s.atmo) },
     uHasOcean: { value: s.ocean },
   }
 }
 
 const PLANET_VERT = /* glsl */ `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+uniform mat4 uModelMatrix;
+uniform mat4 uViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform vec3 uCameraPosition;
 varying vec3 vObj;
 varying vec3 vWorldNormal;
 varying vec3 vViewDir;
 void main(){
-  vObj = normalize(position);
-  vWorldNormal = normalize(mat3(modelMatrix) * normal);
-  vec4 wp = modelMatrix * vec4(position, 1.0);
-  vViewDir = normalize(cameraPosition - wp.xyz);
-  gl_Position = projectionMatrix * viewMatrix * wp;
+  vObj = normalize(aPosition);
+  vWorldNormal = normalize(mat3(uModelMatrix) * aNormal);
+  vec4 wp = uModelMatrix * vec4(aPosition, 1.0);
+  vViewDir = normalize(uCameraPosition - wp.xyz);
+  gl_Position = uProjectionMatrix * uViewMatrix * wp;
 }
 `
 
 const PLANET_FRAG = /* glsl */ `
+precision highp float;
 uniform vec3 uSunDir;
 uniform float uTime;
 uniform vec3 uOceanDeep;
@@ -167,14 +201,23 @@ void main(){
 `
 
 const ATMO_VERT = /* glsl */ `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+uniform mat4 uModelMatrix;
+uniform mat4 uViewMatrix;
+uniform mat4 uProjectionMatrix;
 varying vec3 vNormalV;
 void main(){
-  vNormalV = normalize(normalMatrix * normal);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  // view-space normal: V = uViewMatrix * M * position, R³ part of V = Riy * M
+  mat4 mv = uViewMatrix * uModelMatrix;
+  vNormalV = normalize(mat3(mv) * aNormal);
+  gl_Position = uProjectionMatrix * mv * vec4(aPosition, 1.0);
 }
 `
 
 const ATMO_FRAG = /* glsl */ `
+precision mediump float;
 uniform vec3 uAtmo;
 varying vec3 vNormalV;
 void main(){
@@ -184,35 +227,34 @@ void main(){
 `
 
 export function buildPlanet(planet: PlanetId, radiusUnits: number): {
-  group: THREE.Group
+  group: Object3D
   uniforms: PlanetUniforms
-  surface: THREE.Mesh
-  clouds: THREE.Mesh
-  atmoShell: THREE.Mesh
+  surface: Mesh
+  clouds: Mesh
+  atmoShell: Mesh
 } {
-  const group = new THREE.Group()
+  const group = new Object3D()
   const uniforms = createPlanetUniforms(planet)
 
-  const surface = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 96, 64),
-    new THREE.ShaderMaterial({
-      uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
-      vertexShader: PLANET_VERT,
-      fragmentShader: PLANET_FRAG,
-    })
-  )
+  const surfaceMat = new ShaderMaterial({
+    uniforms: uniforms as unknown as Record<string, { value: unknown }>,
+    vertexShader: PLANET_VERT,
+    fragmentShader: PLANET_FRAG,
+  })
+  const surface = new Mesh(new SphereGeometry(1, 96, 64), surfaceMat)
   surface.scale.setScalar(radiusUnits)
   group.add(surface)
 
-  const clouds = new THREE.Mesh(
-    new THREE.SphereGeometry(1.008, 72, 48),
-    new THREE.ShaderMaterial({
+  const clouds = new Mesh(
+    new SphereGeometry(1.008, 72, 48),
+    new ShaderMaterial({
       uniforms: {
         uSunDir: uniforms.uSunDir,
         uTime: uniforms.uTime,
-      } as unknown as Record<string, THREE.IUniform>,
-      vertexShader: PLANET_VERT.replace('vObj = normalize(position);', 'vObj = normalize(position);'),
+      } as unknown as Record<string, { value: unknown }>,
+      vertexShader: PLANET_VERT,
       fragmentShader: /* glsl */ `
+        precision highp float;
         uniform vec3 uSunDir;
         uniform float uTime;
         varying vec3 vObj;
@@ -230,20 +272,20 @@ export function buildPlanet(planet: PlanetId, radiusUnits: number): {
       `,
       transparent: true,
       depthWrite: false,
-    })
+    }),
   )
   clouds.scale.setScalar(radiusUnits)
   clouds.visible = planet === 'earth'
   group.add(clouds)
 
-  const atmoShell = new THREE.Mesh(
-    new THREE.SphereGeometry(1.05, 64, 48),
-    new THREE.ShaderMaterial({
-      uniforms: { uAtmo: uniforms.uAtmo } as unknown as Record<string, THREE.IUniform>,
+  const atmoShell = new Mesh(
+    new SphereGeometry(1.05, 64, 48),
+    new ShaderMaterial({
+      uniforms: { uAtmo: uniforms.uAtmo } as unknown as Record<string, { value: unknown }>,
       vertexShader: ATMO_VERT,
       fragmentShader: ATMO_FRAG,
-      side: THREE.BackSide,
-      blending: THREE.AdditiveBlending,
+      // render the shell from inside so the rim glow wraps the limb; the
+      // engine has no additive blending so the shader alpha is kept modest
       transparent: true,
       depthWrite: false,
     })
@@ -256,48 +298,120 @@ export function buildPlanet(planet: PlanetId, radiusUnits: number): {
 
 /* ---------------- vehicle geometry ---------------- */
 
-/** sharp-edged waverider dart (nose +X, up +Y) */
-export function buildWaveriderGeometry(): THREE.BufferGeometry {
-  const pts = [
-    new THREE.Vector3(5.2, 0, 0), // nose
-    new THREE.Vector3(-0.4, 0.06, 2.9), // leading edge tips
-    new THREE.Vector3(-0.4, 0.06, -2.9),
-    new THREE.Vector3(-5.0, 0.62, 1.75), // tail top corners
-    new THREE.Vector3(-5.0, 0.62, -1.75),
-    new THREE.Vector3(-5.0, -0.42, 1.75), // tail bottom corners
-    new THREE.Vector3(-5.0, -0.42, -1.75),
-    new THREE.Vector3(-2.2, -0.52, 0), // keel
-    new THREE.Vector3(-5.0, -0.2, 0), // tail center
-  ]
-  return new ConvexGeometry(pts)
-}
-
-/** blunt-body capsule with heatshield (nose +X: heatshield faces −X... we
- *  actually orient the vehicle with velocity along +X, so the shield is at −X,
- *  the backshell toward +X) */
-export function buildCapsuleGeometry(): THREE.BufferGeometry {
-  // lathe profile around Y then rotate so axis = X; profile from shield edge to apex
-  const profile: THREE.Vector2[] = []
-  const R = 1.55
-  // heatshield spherical cap (40°)
-  for (let i = 0; i <= 10; i++) {
-    const ang = (-40 + (40 * i) / 10) * (Math.PI / 180)
-    profile.push(new THREE.Vector2(R * Math.cos(ang), R * Math.sin(ang) - R * Math.sin((-40 * Math.PI) / 180)))
+/* Brute-force convex hull: emit every triangle of the point set that has all
+   remaining points strictly on one side. Fine for the 8-point waverider. */
+function convexHullGeometry(pts: [number, number, number][]): BufferGeometry {
+  const positions: number[] = []
+  const EPS = 1e-6
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      for (let k = j + 1; k < pts.length; k++) {
+        const A = pts[i], B = pts[j], C = pts[k]
+        const n = [
+          (B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]),
+          (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]),
+          (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]),
+        ]
+        const nLen = Math.hypot(n[0], n[1], n[2])
+        if (nLen < EPS) continue
+        let hasPos = false
+        let hasNeg = false
+        for (let m = 0; m < pts.length && !(hasPos && hasNeg); m++) {
+          if (m === i || m === j || m === k) continue
+          const P = pts[m]
+          const d =
+            n[0] * (P[0] - A[0]) + n[1] * (P[1] - A[1]) + n[2] * (P[2] - A[2])
+          if (d > EPS) hasPos = true
+          else if (d < -EPS) hasNeg = true
+        }
+        if (hasPos && hasNeg) continue
+        const flip = hasNeg // all strictly on + side → ensure outward winding
+        const tri = flip ? [i, k, j] : [i, j, k]
+        for (const idx of tri) positions.push(pts[idx][0], pts[idx][1], pts[idx][2])
+      }
+    }
   }
-  // shoulder + backshell cone
-  profile.push(new THREE.Vector2(1.5, 0.1))
-  profile.push(new THREE.Vector2(0.85, 1.45))
-  profile.push(new THREE.Vector2(0.55, 1.7))
-  profile.push(new THREE.Vector2(0.0, 1.78))
-  const geo = new THREE.LatheGeometry(profile, 40)
-  geo.rotateZ(Math.PI / 2) // axis Y → X (apex toward +X)
-  geo.translate(-0.55, 0, 0) // center roughly
+  const geo = new BufferGeometry()
+  geo.setAttribute('position', { array: new Float32Array(positions), itemSize: 3 })
+  geo.computeVertexNormals()
   return geo
 }
 
-/* ---------------- glow sprite texture ---------------- */
+/** sharp-edged waverider dart (nose +X, up +Y) */
+export function buildWaveriderGeometry(): BufferGeometry {
+  return convexHullGeometry([
+    [5.2, 0, 0], // nose
+    [-0.4, 0.06, 2.9], // leading edge tips
+    [-0.4, 0.06, -2.9],
+    [-5.0, 0.62, 1.75], // tail top corners
+    [-5.0, 0.62, -1.75],
+    [-5.0, -0.42, 1.75], // tail bottom corners
+    [-5.0, -0.42, -1.75],
+    [-2.2, -0.52, 0], // keel
+  ])
+}
 
-export function makeGlowTexture(): THREE.CanvasTexture {
+/** blunt-body capsule with heatshield — procedural lathe (engine has no
+ *  LatheGeometry). Same profile three used: shield cap arc → shoulder →
+ *  backshell cone → apex. */
+export function buildCapsuleGeometry(): BufferGeometry {
+  const profile: [number, number][] = [] // [radial, y]
+  const R = 1.55
+  for (let i = 0; i <= 10; i++) {
+    const ang = (-40 + (40 * i) / 10) * (Math.PI / 180)
+    profile.push([
+      R * Math.cos(ang),
+      R * Math.sin(ang) - R * Math.sin((-40 * Math.PI) / 180),
+    ])
+  }
+  profile.push([1.5, 0.1])
+  profile.push([0.85, 1.45])
+  profile.push([0.55, 1.7])
+  profile.push([0.0, 1.78])
+
+  const SEG = 40
+  const positions = new Float32Array(profile.length * (SEG + 1) * 3)
+  let v = 0
+  for (let k = 0; k < profile.length; k++) {
+    const [r, y] = profile[k]
+    for (let i = 0; i <= SEG; i++) {
+      const phi = (i / SEG) * Math.PI * 2
+      positions[v++] = r * Math.sin(phi)
+      positions[v++] = y
+      positions[v++] = r * Math.cos(phi)
+    }
+  }
+  const indices: number[] = []
+  for (let k = 0; k < profile.length - 1; k++) {
+    for (let i = 0; i < SEG; i++) {
+      const a = k * (SEG + 1) + i
+      const b = (k + 1) * (SEG + 1) + i
+      const c = (k + 1) * (SEG + 1) + i + 1
+      const d = k * (SEG + 1) + i + 1
+      indices.push(a, d, c, a, c, b)
+    }
+  }
+  const geo = new BufferGeometry()
+  geo.setAttribute('position', { array: positions, itemSize: 3 })
+  geo.setIndex(indices)
+  geo.computeVertexNormals()
+
+  /* three parity transforms: rotateZ(π/2) then translate(-0.55, 0, 0).
+     rotateZ(π/2): (x, y) → (-y, x) */
+  const pos = geo.getAttribute('position')!
+  const arr = pos.array as Float32Array
+  for (let i = 0; i < arr.length; i += 3) {
+    const x = arr[i], y = arr[i + 1]
+    arr[i] = -y - 0.55
+    arr[i + 1] = x
+  }
+  geo.computeVertexNormals()
+  return geo
+}
+
+/* ---------------- plasma glow texture ---------------- */
+
+export function makeGlowTexture(): Texture {
   const size = 128
   const cv = document.createElement('canvas')
   cv.width = size
@@ -310,16 +424,24 @@ export function makeGlowTexture(): THREE.CanvasTexture {
   g.addColorStop(1, 'rgba(255,80,20,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, size, size)
-  const tex = new THREE.CanvasTexture(cv)
-  tex.colorSpace = THREE.SRGBColorSpace
+  const tex = new Texture(cv)
+  tex.wrapS = 'clamp'
+  tex.wrapT = 'clamp'
+  tex.magFilter = 'linear'
+  tex.minFilter = 'linear'
+  tex.generateMipmaps = false
   return tex
 }
 
-export function makeStarfield(count: number, radius: number): THREE.Points {
+/* ---------------- starfield ---------------- */
+
+/* Engine renderer has no additive blending and points attenuate with a
+   1.5–3.5 px clamp; per-vertex brightness comes through the color attribute
+   exactly like the three version. */
+export function makeStarfield(count: number, radius: number): Points {
   const pos = new Float32Array(count * 3)
   const col = new Float32Array(count * 3)
   for (let i = 0; i < count; i++) {
-    // random direction
     const u = Math.random() * 2 - 1
     const phi = Math.random() * Math.PI * 2
     const s = Math.sqrt(1 - u * u)
@@ -331,15 +453,12 @@ export function makeStarfield(count: number, radius: number): THREE.Points {
     col[i * 3 + 1] = b
     col[i * 3 + 2] = b * (0.9 + Math.random() * 0.1)
   }
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
-  const mat = new THREE.PointsMaterial({
-    size: 1.6,
-    vertexColors: true,
-    sizeAttenuation: false,
-    transparent: true,
-    opacity: 0.85,
-  })
-  return new THREE.Points(geo, mat)
+  const geo = new BufferGeometry()
+  geo.setAttribute('position', { array: pos, itemSize: 3 })
+  geo.setAttribute('color', { array: col, itemSize: 3 })
+  // the engine renders Points with the basic shader; size rides on the
+  // material (pixel units, attenuated with a 1.5–3.5 px clamp)
+  const mat = new MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85 })
+  ;(mat as unknown as { size: number }).size = 1.6
+  return new Points(geo, mat)
 }

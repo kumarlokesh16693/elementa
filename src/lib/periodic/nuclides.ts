@@ -308,7 +308,7 @@ export function formatHl(nu: Nuclide): string {
   if (nu.hlSec == null) return 'not measured'
   const s = nu.hlSec
   const pretty = (v: number, u: string) => `${sig3(v)} ${u}`
-  let text: string
+  let text = ''
   if (s < 1e-12) text = pretty(s * 1e12, 'ps')
   else if (s > 3.156e28) text = pretty(s / 3.156e25, 'Ey')
   else {
@@ -368,10 +368,11 @@ const CLUSTER_EMIT: Record<string, [number, number]> = {
 /** Q value in keV for a given decay code, computed from atomic mass excesses */
 export function qFor(nu: Nuclide, code: string): number | null {
   if (nu.me == null) return null
+  const meBase = nu.me // capture: closure over nu.me would defeat null-narrowing
   const { z, n } = nu
   const sub = (dz: number, dn: number, meEmit = 0): number | null => {
     const d = meOf(z + dz, n + dn)
-    return d == null ? null : nu.me - d - meEmit
+    return d == null ? null : meBase - d - meEmit
   }
   switch (code) {
     case 'B-':

@@ -388,6 +388,105 @@ export function orbitalExtent(n: number, l: number, zEff: number): number {
 }
 
 /**
+ * Normalisation integral of the radial function, ∫₀^R r² |R_nl(r)|² dr.
+ * A hydrogenic radial function is normalised to 1 over [0, ∞); the numerical
+ * value should be 1 to within the truncation error of the integration limit.
+ * This is an honest, checkable diagnostic for the isosurface/plot code.
+ */
+export function radialNormalization(n: number, l: number, zEff: number, bins = 8000): number {
+  const extent = Math.max(1, orbitalExtent(n, l, zEff) * 3)
+  const dr = extent / bins
+  let sum = 0
+  for (let i = 0; i < bins; i++) {
+    const r = (i + 0.5) * dr
+    const R = radialR(n, l, r, zEff)
+    sum += R * R * r * r * dr
+  }
+  return sum
+}
+
+/** Numerical ⟨r⟩ = ∫ r³|R|² dr / ∫ r²|R|² dr, to compare with the analytic formula. */
+export function numericalMeanRadius(n: number, l: number, zEff: number, bins = 8000): number {
+  const extent = Math.max(1, orbitalExtent(n, l, zEff) * 3)
+  const dr = extent / bins
+  let numerator = 0
+  let denominator = 0
+  for (let i = 0; i < bins; i++) {
+    const r = (i + 0.5) * dr
+    const R = radialR(n, l, r, zEff)
+    const weight = R * R * r * r * dr
+    numerator += r * weight
+    denominator += weight
+  }
+  return denominator > 0 ? numerator / denominator : Number.NaN
+}
+
+/* ---------------- ground-state term symbols (Hund's rules) ---------------- */
+
+const TERM_LETTERS = ['S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M']
+
+export interface TermSymbol {
+  /** formatted term, e.g. ³P₀ */
+  symbol: string
+  /** spin multiplicity 2S+1 */
+  multiplicity: number
+  S: number
+  L: number
+  J: number
+  letter: string
+  subshell: string
+  note: string
+}
+
+function fraction(value: number): string {
+  const whole = Math.floor(value)
+  const half = Math.abs(value - whole - 0.5) < 1e-9
+  const suffix = half ? '½' : ''
+  if (whole === 0) return half ? '½' : '0'
+  return `${whole}${suffix}`
+}
+
+/**
+ * Ground term of the outermost partially filled subshell from Hund's rules
+ * (LS coupling). This is exact for the ground term of an isolated p^n/d^n/f^n
+ * subshell; it does not attempt to combine several open shells (most lanthanide
+ * and actinide ground terms need a full atomic-structure calculation).
+ */
+export function groundTerm(occupied: Subshell[]): TermSymbol {
+  const partial = occupied.filter((s) => s.e > 0 && s.e < 2 * (2 * s.l + 1))
+  if (!partial.length) {
+    return {
+      symbol: '¹S₀', multiplicity: 1, S: 0, L: 0, J: 0, letter: 'S', subshell: 'closed shells',
+      note: 'All subshells are closed (or empty): the ground term is ¹S₀.',
+    }
+  }
+  const target = [...partial].sort((a, b) => b.l - a.l || b.n - a.n)[0]
+  const capacity = 2 * (2 * target.l + 1)
+  const holes = target.e > 2 * target.l + 1
+  const unpaired = holes ? capacity - target.e : target.e
+  const S = unpaired / 2
+  let L = 0
+  for (let j = 0; j < unpaired; j++) L += target.l - j
+  const J = unpaired === 2 * target.l + 1 ? S : holes ? L + S : Math.abs(L - S)
+  const multiplicity = 2 * S + 1
+  const letter = TERM_LETTERS[L] ?? `L=${L}`
+  const subshell = `${target.n}${lLetter(target.l)}${target.e}`
+  const caveat = partial.length > 1
+    ? ` Configurations with more than one open subshell are not coupled here; the displayed term uses ${subshell} alone.`
+    : ''
+  return {
+    symbol: `${multiplicity === 1 ? '' : multiplicity}${letter}${fraction(J)}`,
+    multiplicity,
+    S,
+    L,
+    J,
+    letter,
+    subshell,
+    note: `Hund's rules on the outermost open subshell (${subshell}, ${holes ? `${capacity - target.e} hole${capacity - target.e === 1 ? '' : 's'}` : `${target.e} electron${target.e === 1 ? '' : 's'}`}); LS coupling, ground term only.${caveat}`,
+  }
+}
+
+/**
  * Power-graded symmetric axis for isosurface grids: dense near the nucleus,
  * coarse at the tail. x_i = L · sign(s)|s|^1.35 with s = −1…1.
  */

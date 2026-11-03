@@ -1,329 +1,401 @@
-'use client'
-
-import Link from 'next/link'
-import { Suspense, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import type { CategoryKey, ColorMode } from '@/lib/periodic/types'
+import { h, reactive, type VNode } from 'nexus-framework'
+import type { CategoryKey, ColorMode, ElementData } from '@/lib/periodic/types'
 import { CATEGORIES, COLOR_MODES, BLOCK_COLORS, PHASE_COLORS } from '@/lib/periodic/types'
 import {
-  getElement,
-  heatLegend,
-  searchElements,
-  tileColor,
-  isHeatMode,
-  ORIGINS,
-  HEAT_GRADIENT_CSS,
+  ELEMENTS, getElement, heatLegend, heatGradientCss, originPct, searchElements,
+  tileColor, isHeatMode, ORIGINS,
 } from '@/lib/periodic'
 import type { OriginKey } from '@/lib/periodic'
+import { PALETTES, PALETTE_MAP, type PaletteId } from '@/lib/palette'
+import { parseStructuredQuery } from '@/lib/query'
 import PeriodicTable from '@/components/periodic/PeriodicTable'
 import DetailPanel from '@/components/periodic/DetailPanel'
+import IonizationChart from '@/components/periodic/IonizationChart'
+import CompareElements from '@/components/periodic/CompareElements'
+import ResearchPanel from '@/components/periodic/ResearchPanel'
+import { ElementaLogo } from '@/components/ElementaLogo'
+import { GitHubLink } from '@/components/GitHubLink'
 
-export default function Home() {
-  return (
-    <Suspense fallback={null}>
-      <HomeInner />
-    </Suspense>
-  )
+function H(tag: any, props?: any, ...children: any[]): VNode {
+  return h(tag, props, ...children) as VNode
 }
 
-function HomeInner() {
-  const params = useSearchParams()
-  const eParam = parseInt(params.get('e') ?? '', 10)
-  const hasE = Number.isFinite(eParam) && eParam >= 1 && eParam <= 118
-
-  const [selectedZ, setSelectedZ] = useState(hasE ? eParam : 6) // Carbon (or ?e= deep link)
-  const [panelOpen, setPanelOpen] = useState(hasE)
-  const [colorMode, setColorMode] = useState<ColorMode>('category')
-  const [activeCats, setActiveCats] = useState<Set<CategoryKey> | null>(null)
-  const [originFilter, setOriginFilter] = useState<OriginKey | null>(null)
-  const [query, setQuery] = useState('')
-  const [focused, setFocused] = useState(false)
-
-  const selectedEl = getElement(selectedZ) ?? getElement(1)!
-  const accent = tileColor(selectedEl, colorMode).text
-
-  const results = useMemo(() => searchElements(query), [query])
-  const matches = useMemo(
-    () => (query.trim() ? new Set(results.map((e) => e.number)) : null),
-    [query, results],
-  )
-
-  const select = (z: number) => {
-    setSelectedZ(z)
-    setPanelOpen(true)
-  }
-
-  const toggleCat = (k: CategoryKey) => {
-    setActiveCats((prev) => {
-      const next = new Set(prev ?? [])
-      if (next.has(k)) next.delete(k)
-      else next.add(k)
-      return next.size ? next : null
-    })
-  }
-
-  const hasFilters = activeCats != null || originFilter != null || query.trim().length > 0
-
-  return (
-    <div className="flex h-dvh flex-col bg-[#070a10]">
-      {/* header */}
-      <header className="relative z-20 flex h-14 shrink-0 items-center gap-4 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-[17px] font-bold tracking-[0.22em] text-zinc-100">
-            ELEM<span className="text-amber-400">E</span>NTA
-          </h1>
-          <span className="hidden font-mono text-[10px] text-zinc-500 md:inline">
-            research-grade · 118 elements · click any element for full details
-          </span>
-        </div>
-
-        {/* search */}
-        <div className="relative ml-auto w-56 lg:w-72">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 120)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setQuery('')
-              if (e.key === 'Enter' && results.length > 0) {
-                select(results[0].number)
-                setQuery('')
-              }
-            }}
-            placeholder="Search name, symbol, atomic number…"
-            className="w-full rounded-md border border-white/10 bg-[#0c1220] px-3 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-amber-400/50 focus:outline-none"
-          />
-          {focused && query.trim() && results.length > 0 && (
-            <div className="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg border border-white/10 bg-[#0c1220] shadow-2xl">
-              {results.map((el) => {
-                const c = tileColor(el, 'category')
-                return (
-                  <button
-                    key={el.number}
-                    type="button"
-                    onMouseDown={() => {
-                      select(el.number)
-                      setQuery('')
-                    }}
-                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition hover:bg-white/5"
-                  >
-                    <span
-                      className="w-9 text-center font-mono text-[12px] font-bold"
-                      style={{ color: c.text }}
-                    >
-                      {el.symbol}
-                    </span>
-                    <span className="truncate text-[12px] text-zinc-200">{el.name}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[10px] text-zinc-500">
-                      {el.number} · {el.mass}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-          {focused && query.trim() && results.length === 0 && (
-            <div className="absolute left-0 top-full z-50 mt-1 w-full rounded-lg border border-white/10 bg-[#0c1220] px-3 py-2 text-[11px] text-zinc-500 shadow-2xl">
-              No element matches “{query}”.
-            </div>
-          )}
-        </div>
-
-        {/* color mode */}
-        <select
-          value={colorMode}
-          onChange={(e) => {
-            setColorMode(e.target.value as ColorMode)
-            setOriginFilter(null)
-          }}
-          className="rounded-md border border-white/10 bg-[#0c1220] px-2 py-1.5 text-[11px] text-zinc-300 focus:outline-none"
-          aria-label="Color mode"
-        >
-          {COLOR_MODES.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-
-        {/* MO builder */}
-        <Link
-          href="/mo"
-          className="shrink-0 rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-400/20"
-        >
-          MO builder
-        </Link>
-
-        {/* QM orbital lab */}
-        <Link
-          href="/orbitals"
-          className="shrink-0 rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20"
-        >
-          Orbital lab
-        </Link>
-
-        {/* Segrè chart of nuclides */}
-        <Link
-          href="/segre"
-          className="shrink-0 rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-400/20"
-        >
-          Segrè chart
-        </Link>
-      </header>
-
-      {/* legend bar */}
-      <div className="z-10 flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4">
-        {isHeatMode(colorMode) ? (
-          <>
-            <span className="shrink-0 text-[10px] uppercase tracking-wider text-zinc-500">
-              {heatLegend(colorMode).unit}
-            </span>
-            <span className="shrink-0 font-mono text-[10px] text-zinc-400">
-              {heatLegend(colorMode).lo}
-            </span>
-            <div className="h-2 w-48 shrink-0 rounded-full md:w-72" style={{ background: HEAT_GRADIENT_CSS }} />
-            <span className="shrink-0 font-mono text-[10px] text-zinc-400">
-              {heatLegend(colorMode).hi} {heatLegend(colorMode).unit}
-            </span>
-            <span className="shrink-0 text-[10px] text-zinc-600">
-              · grey = no consensus value{colorMode === 'density' ? ' · logarithmic scale' : ''}
-            </span>
-          </>
-        ) : colorMode === 'block' ? (
-          <>
-            {Object.entries(BLOCK_COLORS).map(([k, c]) => (
-              <span
-                key={k}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px]"
-                style={{ color: c }}
-              >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
-                {k}-block
-              </span>
-            ))}
-            <span className="shrink-0 text-[10px] text-zinc-600">· highest-energy occupied orbital</span>
-          </>
-        ) : colorMode === 'phase' ? (
-          <>
-            {Object.entries(PHASE_COLORS).map(([k, c]) => (
-              <span
-                key={k}
-                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] capitalize"
-                style={{ color: c }}
-              >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />
-                {k}
-              </span>
-            ))}
-            <span className="shrink-0 text-[10px] text-zinc-600">· predicted phase for heaviest elements</span>
-          </>
-        ) : colorMode === 'origins' ? (
-          <>
-            {ORIGINS.map((o) => {
-              const active = originFilter == null || originFilter === o.key
-              return (
-                <button
-                  key={o.key}
-                  type="button"
-                  onClick={() => setOriginFilter(originFilter === o.key ? null : o.key)}
-                  title={`${o.desc} — flagship: ${o.example}`}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition ${
-                    active ? 'border-white/20 bg-white/[0.05]' : 'border-transparent opacity-35'
-                  }`}
-                  style={{ color: active ? o.color : undefined }}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: o.color }} />
-                  {o.label}
-                </button>
-              )
-            })}
-            <span className="shrink-0 text-[10px] text-zinc-600">
-              · shares of solar-system abundance · digitized from J. Johnson (SDSS 2019) · click to highlight
-            </span>
-          </>
-        ) : (
-          <>
-            {CATEGORIES.map((cat) => {
-              const active = activeCats == null || activeCats.has(cat.key)
-              return (
-                <button
-                  key={cat.key}
-                  type="button"
-                  onClick={() => toggleCat(cat.key)}
-                  title={cat.desc}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition ${
-                    active ? 'border-white/20 bg-white/[0.05]' : 'border-transparent opacity-35'
-                  }`}
-                  style={{ color: active ? cat.color : undefined }}
-                >
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
-                  {cat.label}
-                </button>
-              )
-            })}
-            {activeCats != null && (
-              <button
-                type="button"
-                onClick={() => setActiveCats(null)}
-                className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400 transition hover:text-zinc-200"
-              >
-                clear ×
-              </button>
-            )}
-          </>
-        )}
-        {hasFilters && (
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCats(null)
-              setOriginFilter(null)
-              setQuery('')
-            }}
-            className="ml-auto shrink-0 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300 transition hover:bg-amber-400/20"
-          >
-            reset filters
-          </button>
-        )}
-      </div>
-
-      {/* main — full-width table, no sidebar so every element stays visible */}
-      <main className="relative flex-1 overflow-auto">
-        <div
-          className="flex min-h-full flex-col items-center p-4 lg:p-6"
-          style={{
-            background:
-              'radial-gradient(1100px 520px at 50% -8%, rgba(251,191,36,0.05), transparent 70%)',
-          }}
-        >
-          <PeriodicTable
-            selected={selectedZ}
-            onSelect={(el) => select(el.number)}
-            colorMode={colorMode}
-            matches={matches}
-            activeCategories={activeCats}
-            originFilter={colorMode === 'origins' ? originFilter : null}
-          />
-          <p className="mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600">
-            Reference values follow IUPAC conventions — Pauling electronegativity, first ionization
-            energy in eV, electron affinity in kJ/mol, empirical radii in pm (calculated for noble
-            gases), temperatures in K, densities at STP. Bracketed standard atomic weights apply to
-            Tc, Pm and Z ≥ 84. A dash (—) marks properties with no accepted experimental value.
-            Radioactive nuclides are flagged with a dot; Bohr shells are a pedagogical
-            approximation, not a quantum-mechanical orbital picture.
-          </p>
-        </div>
-      </main>
-
-      {/* full element detail — modal only */}
-      <DetailPanel
-        element={selectedEl}
-        accent={accent}
-        open={panelOpen}
-        onClose={() => setPanelOpen(false)}
-      />
-    </div>
-  )
+type CompareProp = 'mass' | 'electronegativity' | 'ionizationEnergy' | 'electronAffinity' | 'atomicRadius' | 'meltingPoint' | 'boilingPoint' | 'density' | 'valence'
+type SavedView = {
+  name: string
+  at: string
+  e: number | null
+  mode: ColorMode
+  cats: CategoryKey[]
+  origin: OriginKey | null
+  q: string
+  chart: boolean
+  cmp: number[]
+  prop: CompareProp
+  palette: PaletteId
 }
+
+const COMPARE_PROPS: CompareProp[] = ['mass', 'electronegativity', 'ionizationEnergy', 'electronAffinity', 'atomicRadius', 'meltingPoint', 'boilingPoint', 'density', 'valence']
+const CATEGORY_KEYS = CATEGORIES.map((category) => category.key)
+const ORIGIN_KEYS = ORIGINS.map((origin) => origin.key)
+const SAVED_KEY = 'elementa:saved-views'
+
+const params = new URLSearchParams(window.location.search)
+
+function intParam(name: string, min: number, max: number): number | null {
+  const value = Number.parseInt(params.get(name) ?? '', 10)
+  return Number.isFinite(value) && value >= min && value <= max ? value : null
+}
+
+const eParam = intParam('e', 1, 118)
+const validDeepLink = eParam != null
+
+function validMode(value: string | null): ColorMode {
+  const found = COLOR_MODES.find((mode) => mode.key === value)
+  return (found?.key ?? 'category') as ColorMode
+}
+
+function validPalette(value: string | null): PaletteId {
+  return value && value in PALETTE_MAP ? (value as PaletteId) : 'default'
+}
+
+function catParam(): Set<CategoryKey> | null {
+  const raw = params.get('cats')
+  if (!raw) return null
+  const keys = raw.split(',').filter((key): key is CategoryKey => (CATEGORY_KEYS as string[]).includes(key))
+  return keys.length ? new Set(keys) : null
+}
+
+function originParam(): OriginKey | null {
+  const raw = params.get('origin')
+  return raw && (ORIGIN_KEYS as string[]).includes(raw) ? (raw as OriginKey) : null
+}
+
+function compareParam(): number[] {
+  const raw = params.get('cmp')
+  if (!raw) return []
+  return [...new Set(raw.split(',').map((part) => Number.parseInt(part, 10)).filter((z) => Number.isFinite(z) && z >= 1 && z <= 118))].slice(0, 4)
+}
+
+function propParam(): CompareProp {
+  const raw = params.get('prop') as CompareProp | null
+  return raw && COMPARE_PROPS.includes(raw) ? raw : 'ionizationEnergy'
+}
+
+function loadSaved(): SavedView[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SAVED_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.slice(0, 12) : []
+  } catch {
+    return []
+  }
+}
+
+function persistSaved(views: SavedView[]): void {
+  try { window.localStorage.setItem(SAVED_KEY, JSON.stringify(views)) } catch { /* storage may be unavailable */ }
+}
+
+const state = reactive({
+  selectedZ: eParam ?? 6,
+  panelOpen: validDeepLink && params.get('open') !== '0',
+  colorMode: validMode(params.get('mode')),
+  activeCats: catParam(),
+  originFilter: originParam(),
+  query: params.get('q') ?? '',
+  focused: false,
+  showIonizationChart: params.get('chart') === '1',
+  compared: compareParam(),
+  compareOpen: params.get('compare') === '1' && compareParam().length >= 2,
+  compareProperty: propParam(),
+  palette: validPalette(params.get('palette')),
+  researchOpen: false,
+  saved: loadSaved(),
+  savedOpen: false,
+  savedNote: '',
+})
+
+window.addEventListener('elementa-detail-close', () => { state.panelOpen = false })
+window.addEventListener('elementa-open-research', () => { state.researchOpen = true })
+
+window.addEventListener('keydown', (event: KeyboardEvent) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    document.getElementById('elementa-search')?.focus()
+  }
+})
+
+function select(z: number): void {
+  state.selectedZ = z
+  state.panelOpen = true
+}
+
+function toggleCat(key: CategoryKey): void {
+  const next = new Set(state.activeCats ?? [])
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  state.activeCats = next.size ? next : null
+}
+
+function toggleCompare(atomicNumber: number): void {
+  if (state.compared.includes(atomicNumber)) state.compared = state.compared.filter((z) => z !== atomicNumber)
+  else if (state.compared.length < 4) state.compared = [...state.compared, atomicNumber]
+}
+
+function snapshot(): Record<string, unknown> {
+  return {
+    element: state.panelOpen ? state.selectedZ : null,
+    colorMode: state.colorMode,
+    categories: state.activeCats ? [...state.activeCats] : null,
+    origin: state.originFilter,
+    query: state.query,
+    chart: state.showIonizationChart,
+    compared: state.compared,
+    compareProperty: state.compareProperty,
+    palette: state.palette,
+  }
+}
+
+let lastUrl = ''
+function writeUrl(): void {
+  const next = new URLSearchParams()
+  if (state.panelOpen) next.set('e', String(state.selectedZ))
+  if (state.colorMode !== 'category') next.set('mode', state.colorMode)
+  if (state.activeCats) next.set('cats', [...state.activeCats].join(','))
+  if (state.originFilter) next.set('origin', state.originFilter)
+  if (state.query.trim()) next.set('q', state.query)
+  if (state.showIonizationChart) next.set('chart', '1')
+  if (state.compared.length) next.set('cmp', state.compared.join(','))
+  if (state.compareOpen) next.set('compare', '1')
+  if (state.compareProperty !== 'ionizationEnergy') next.set('prop', state.compareProperty)
+  if (state.palette !== 'default') next.set('palette', state.palette)
+  const url = `${window.location.pathname}${next.toString() ? `?${next}` : ''}`
+  if (url !== lastUrl) {
+    lastUrl = url
+    window.history.replaceState(null, '', url)
+  }
+}
+
+function applySaved(view: SavedView): void {
+  state.panelOpen = view.e != null
+  if (view.e != null) state.selectedZ = view.e
+  state.colorMode = view.mode
+  state.activeCats = view.cats.length ? new Set(view.cats) : null
+  state.originFilter = view.origin
+  state.query = view.q
+  state.showIonizationChart = view.chart
+  state.compared = view.cmp
+  state.compareProperty = view.prop
+  state.palette = view.palette
+  state.savedOpen = false
+  state.savedNote = `Restored “${view.name}”`
+  window.setTimeout(() => { state.savedNote = '' }, 2200)
+}
+
+function saveCurrent(): void {
+  const name = `View ${state.saved.length + 1}`
+  const view: SavedView = {
+    name,
+    at: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    e: state.panelOpen ? state.selectedZ : null,
+    mode: state.colorMode,
+    cats: state.activeCats ? [...state.activeCats] : [],
+    origin: state.originFilter,
+    q: state.query,
+    chart: state.showIonizationChart,
+    cmp: state.compared,
+    prop: state.compareProperty,
+    palette: state.palette,
+  }
+  const next = [...state.saved, view]
+  state.saved = next
+  persistSaved(next)
+  state.savedNote = `Saved “${name}” in this browser`
+  window.setTimeout(() => { state.savedNote = '' }, 2200)
+}
+
+function clearSaved(): void {
+  state.saved = []
+  persistSaved([])
+  state.savedNote = 'Saved views cleared'
+  window.setTimeout(() => { state.savedNote = '' }, 2200)
+}
+
+function actionButton(label: string, href: string, color: string): VNode {
+  return H('a', {
+    href,
+    class: `shrink-0 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition hover:bg-white/10 ${color}`,
+  }, label) as VNode
+}
+
+function HomePage(): VNode {
+  writeUrl()
+
+  const selectedEl = getElement(state.selectedZ) ?? getElement(1)!
+  const accent = tileColor(selectedEl, state.colorMode, state.palette).text
+  const structured = parseStructuredQuery(state.query)
+  const results = structured ? structured.matches : searchElements(state.query)
+  const matches = state.query.trim() ? new Set(results.map((el) => el.number)) : null
+  const visibleElements = ELEMENTS.filter((el) => {
+    if (matches && !matches.has(el.number)) return false
+    if (state.activeCats && !state.activeCats.has(el.category)) return false
+    if (state.colorMode === 'origins' && state.originFilter && originPct(el.number, state.originFilter) < 5) return false
+    return true
+  })
+  const hasFilters = state.activeCats != null || state.originFilter != null || state.query.trim().length > 0
+  const legends: Array<VNode | null> = []
+
+  if (isHeatMode(state.colorMode)) {
+    const legend = heatLegend(state.colorMode)
+    legends.push(
+      H('span', { class: 'shrink-0 text-[10px] uppercase tracking-wider text-zinc-500' }, legend.unit),
+      H('span', { class: 'shrink-0 font-mono text-[10px] text-zinc-400' }, legend.lo),
+      H('div', { class: 'h-2 w-48 shrink-0 rounded-full md:w-72', style: { background: heatGradientCss(state.palette) } }),
+      H('span', { class: 'shrink-0 font-mono text-[10px] text-zinc-400' }, `${legend.hi} ${legend.unit}`),
+      H('span', { class: 'shrink-0 text-[10px] text-zinc-600' }, `· grey = no consensus value${state.colorMode === 'density' ? ' · logarithmic scale' : ''}`),
+      H('label', { class: 'flex shrink-0 items-center gap-1 text-[10px] text-zinc-600' }, 'ramp',
+        H('select', {
+          value: state.palette, 'aria-label': 'Heat-map colour palette',
+          onChange: (event: Event) => { state.palette = validPalette((event.target as HTMLSelectElement).value) },
+          class: 'rounded border border-white/10 bg-[#0c1220] px-1 py-0.5 text-[10px] text-zinc-300',
+        }, ...PALETTES.map((palette) => H('option', { key: palette.id, value: palette.id, title: palette.description }, palette.label)))),
+    )
+  } else if (state.colorMode === 'block') {
+    legends.push(...Object.entries(BLOCK_COLORS).map(([key, color]) => H('span', {
+      key, class: 'flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px]', style: { color },
+    }, H('span', { class: 'h-1.5 w-1.5 rounded-full', style: { background: color } }), `${key}-block`)))
+    legends.push(H('span', { class: 'shrink-0 text-[10px] text-zinc-600' }, '· highest-energy occupied orbital'))
+  } else if (state.colorMode === 'phase') {
+    legends.push(...Object.entries(PHASE_COLORS).map(([key, color]) => H('span', {
+      key, class: 'flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] capitalize', style: { color },
+    }, H('span', { class: 'h-1.5 w-1.5 rounded-full', style: { background: color } }), key)))
+    legends.push(H('span', { class: 'shrink-0 text-[10px] text-zinc-600' }, '· predicted phase for heaviest elements'))
+  } else if (state.colorMode === 'origins') {
+    legends.push(...ORIGINS.map((origin) => {
+      const active = state.originFilter == null || state.originFilter === origin.key
+      return H('button', {
+        key: origin.key, type: 'button', title: `${origin.desc} — flagship: ${origin.example}`,
+        onClick: () => { state.originFilter = state.originFilter === origin.key ? null : origin.key },
+        class: `flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition ${active ? 'border-white/20 bg-white/[0.05]' : 'border-transparent opacity-35'}`,
+        style: { color: active ? origin.color : undefined },
+      }, H('span', { class: 'h-1.5 w-1.5 rounded-full', style: { background: origin.color } }), origin.label) as VNode
+    }))
+    legends.push(H('span', { class: 'shrink-0 text-[10px] text-zinc-600' }, '· shares of solar-system abundance · digitized from J. Johnson (SDSS 2019) · click to highlight'))
+  } else {
+    legends.push(...CATEGORIES.map((cat) => {
+      const active = state.activeCats == null || state.activeCats.has(cat.key)
+      return H('button', {
+        key: cat.key, type: 'button', title: cat.desc, onClick: () => toggleCat(cat.key),
+        class: `flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] transition ${active ? 'border-white/20 bg-white/[0.05]' : 'border-transparent opacity-35'}`,
+        style: { color: active ? cat.color : undefined },
+      }, H('span', { class: 'h-1.5 w-1.5 rounded-full', style: { background: cat.color } }), cat.label) as VNode
+    }))
+    if (state.activeCats) legends.push(H('button', { type: 'button', class: 'shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400 transition hover:text-zinc-200', onClick: () => { state.activeCats = null } }, 'clear ×'))
+  }
+
+  if (hasFilters) legends.push(H('button', {
+    type: 'button', onClick: () => { state.activeCats = null; state.originFilter = null; state.query = '' },
+    class: 'ml-auto shrink-0 rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300 transition hover:bg-amber-400/20',
+  }, `reset filters${matches ? ` · ${visibleElements.length} shown` : ''}`))
+
+  legends.push(H('button', {
+    type: 'button', onClick: () => { state.savedOpen = !state.savedOpen },
+    class: 'shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-[10px] text-zinc-400 transition hover:text-zinc-200',
+    'aria-expanded': String(state.savedOpen),
+  }, `saved views${state.saved.length ? ` (${state.saved.length})` : ''}`))
+
+  if (state.savedNote) legends.push(H('span', { class: 'shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300', 'aria-live': 'polite' }, state.savedNote))
+
+  const suggestions = state.focused && state.query.trim()
+    ? H('div', { class: 'absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg border border-white/10 bg-[#0c1220] shadow-2xl' },
+        structured
+          ? H('div', { class: 'border-b border-white/10 bg-sky-400/[0.06] px-2.5 py-1.5 text-[10px] text-sky-300' },
+              structured.error
+                ? `Query error: ${structured.error}`
+                : `Structured query · ${structured.label} · ${results.length} match${results.length === 1 ? '' : 'es'}`)
+          : null,
+        results.length
+          ? H('div', { class: 'max-h-72 overflow-y-auto' }, ...results.slice(0, 12).map((el) => {
+              const color = tileColor(el, 'category')
+              return H('button', {
+                key: el.number, type: 'button', onMouseDown: () => { select(el.number); state.query = '' },
+                class: 'flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition hover:bg-white/5',
+              }, H('span', { class: 'w-9 text-center font-mono text-[12px] font-bold', style: { color: color.text } }, el.symbol),
+              H('span', { class: 'truncate text-[12px] text-zinc-200' }, el.name),
+              H('span', { class: 'ml-auto shrink-0 font-mono text-[10px] text-zinc-500' }, `${el.number} · ${el.mass}`))
+            }))
+          : H('div', { class: 'px-3 py-2 text-[11px] text-zinc-500' },
+              structured?.error ? structured.error : `No element matches “${state.query}”.`))
+    : null
+
+  const savedPanel = state.savedOpen
+    ? H('div', { class: 'fixed right-3 top-[104px] z-[60] w-72 rounded-xl border border-white/15 bg-[#0c1220] p-2 shadow-2xl' },
+        H('div', { class: 'mb-1.5 flex items-center gap-2 px-1' },
+          H('span', { class: 'text-[10px] font-semibold uppercase tracking-wider text-zinc-400' }, 'Saved views'),
+          H('button', { type: 'button', onClick: () => { state.savedOpen = false }, class: 'ml-auto text-[11px] text-zinc-500 hover:text-zinc-200', 'aria-label': 'Close saved views' }, '×')),
+        H('button', { type: 'button', onClick: saveCurrent, class: 'w-full rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-1.5 text-[10.5px] text-emerald-300 hover:bg-emerald-400/20' }, '＋ Save current view'),
+        state.saved.length
+          ? H('div', { class: 'mt-1.5 space-y-0.5' }, ...state.saved.map((view) => H('button', {
+              key: `${view.name}-${view.at}`, type: 'button', onClick: () => applySaved(view),
+              class: 'flex w-full items-baseline gap-2 rounded px-2 py-1 text-left hover:bg-white/5',
+            }, H('span', { class: 'text-[10.5px] text-zinc-200' }, view.name), H('span', { class: 'ml-auto font-mono text-[9px] text-zinc-600' }, view.at))))
+          : H('p', { class: 'mt-1.5 px-2 text-[9.5px] text-zinc-600' }, 'No saved views yet. A view stores filters, colour mode, comparison set and palette in this browser only.'),
+        state.saved.length ? H('button', { type: 'button', onClick: clearSaved, class: 'mt-1.5 w-full rounded border border-white/10 px-2 py-1 text-[9.5px] text-zinc-500 hover:text-zinc-300' }, 'Clear all saved views') : null)
+    : null
+
+  return H('div', { class: 'flex h-dvh flex-col bg-[#070a10]' },
+    H('header', { class: 'print-hide relative z-20 flex h-14 shrink-0 items-center gap-3 border-b border-white/10 bg-[#0a0f18]/95 px-4 backdrop-blur' },
+      H('div', { class: 'flex items-center gap-2.5' },
+        ElementaLogo({ size: 28 }),
+        H('h1', { class: 'text-[17px] font-bold tracking-[0.22em] text-zinc-100' }, 'ELEM', H('span', { class: 'text-amber-400' }, 'E'), 'NTA'),
+        H('span', { class: 'hidden font-mono text-[10px] text-zinc-500 xl:inline' }, 'research-grade · 118 elements · ⌘K to search')),
+      H('div', { class: 'relative ml-auto w-52 lg:w-64' },
+        H('input', {
+          id: 'elementa-search', type: 'text', value: state.query,
+          onInput: (event: Event) => { state.query = (event.target as HTMLInputElement).value },
+          onFocus: () => { state.focused = true }, onBlur: () => { window.setTimeout(() => { state.focused = false }, 120) },
+          onKeyDown: (event: KeyboardEvent) => {
+            if (event.key === 'Escape') state.query = ''
+            if (event.key === 'Enter' && results.length) { select(results[0].number); state.query = '' }
+          },
+          placeholder: 'Search, or Z>50 & phase=solid…',
+          'aria-label': 'Search elements or run a structured query',
+          class: `w-full rounded-md border bg-[#0c1220] px-3 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none ${structured?.error ? 'border-rose-400/60' : 'border-white/10 focus:border-amber-400/50'}`,
+        }), suggestions),
+      H('select', {
+        value: state.colorMode, 'aria-label': 'Color mode', onChange: (event: Event) => { state.colorMode = validMode((event.target as HTMLSelectElement).value); state.originFilter = null },
+        class: 'rounded-md border border-white/10 bg-[#0c1220] px-2 py-1.5 text-[11px] text-zinc-300 focus:outline-none',
+      }, COLOR_MODES.map((mode) => H('option', { key: mode.key, value: mode.key, selected: mode.key === state.colorMode }, mode.label))),
+      H('button', {
+        type: 'button', onClick: () => { state.researchOpen = true },
+        class: 'shrink-0 rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20',
+        title: 'Dataset provenance, citations, unit converter and exports',
+      }, 'Data & cite'),
+      H('button', { type: 'button', disabled: state.compared.length < 2, onClick: () => { state.compareOpen = true }, class: 'shrink-0 rounded-md border border-emerald-400/30 bg-emerald-400/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40', title: state.compared.length < 2 ? 'Add at least two elements from their detail panels' : 'Open element comparison' }, `Compare ${state.compared.length}/4`),
+      actionButton('MO builder', './mo.html', 'border-amber-400/40 bg-amber-400/10 text-amber-300'),
+      actionButton('Orbital lab', './orbitals.html', 'border-sky-400/40 bg-sky-400/10 text-sky-300'),
+      actionButton('Segrè chart', './segre.html', 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'),
+      GitHubLink()),
+    H('div', { class: 'print-hide z-10 flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4' }, legends),
+    H('main', { class: 'relative flex-1 overflow-auto' },
+      H('div', { class: 'flex min-h-full flex-col items-center p-4 lg:p-6', style: { background: 'radial-gradient(1100px 520px at 50% -8%, rgba(251,191,36,0.05), transparent 70%)' } },
+        PeriodicTable({ selected: state.selectedZ, onSelect: (el) => select(el.number), colorMode: state.colorMode, palette: state.palette, matches, activeCategories: state.activeCats, originFilter: state.colorMode === 'origins' ? state.originFilter : null }),
+        H('button', { type: 'button', onClick: () => { state.showIonizationChart = !state.showIonizationChart }, 'aria-expanded': String(state.showIonizationChart), class: 'print-hide mt-4 rounded-md border border-amber-400/30 bg-amber-400/[0.06] px-3 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-400/10' }, state.showIonizationChart ? 'Hide ionization chart ↑' : 'Show ionization chart ↓'),
+        state.showIonizationChart ? IonizationChart({ selected: state.selectedZ, onSelect: (el) => select(el.number) }) : null,
+        H('p', { class: 'mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600' },
+          'Reference values follow IUPAC conventions — Pauling electronegativity, first ionization energy in eV, electron affinity in kJ/mol, empirical radii in pm (calculated for noble gases), temperatures in K, densities at STP. Interval atomic weights are shown as [low–high]; bracketed values apply to Tc, Pm and Z ≥ 84. Radioactive nuclides are flagged with a dot. ',
+          H('a', { href: './references.html', class: 'text-sky-500/80 underline decoration-dotted hover:text-sky-300' }, 'Sources, versions and model tiers →')))),
+    DetailPanel({ element: selectedEl, accent, open: state.panelOpen, compareSelected: state.compared.includes(selectedEl.number), compareFull: state.compared.length >= 4, onToggleCompare: () => toggleCompare(selectedEl.number) }),
+    state.compareOpen && state.compared.length >= 2 ? CompareElements({
+      elements: state.compared.map((z) => getElement(z)).filter((el): el is ElementData => el != null),
+      property: state.compareProperty,
+      palette: state.palette,
+      onPropertyChange: (property) => { state.compareProperty = property },
+      onRemove: (z) => { state.compared = state.compared.filter((item) => item !== z); if (state.compared.length < 2) state.compareOpen = false },
+      onClose: () => { state.compareOpen = false },
+    }) : null,
+    savedPanel,
+    ResearchPanel({ open: state.researchOpen, onClose: () => { state.researchOpen = false }, view: snapshot(), elements: visibleElements }),
+  ) as VNode
+}
+
+export default HomePage
