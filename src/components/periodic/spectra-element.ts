@@ -163,8 +163,15 @@ export class ElementaSpectraViewElement extends HTMLElement {
 
   private readAttrs(): void {
     const z = Number(this.getAttribute('data-z') ?? 1)
+    if (this.element && this.element.number !== z) {
+      this.nistLines = []
+      this.selectedNistLine = null
+    }
     this.element = getElement(z) ?? null
     this.accent = this.getAttribute('data-accent') ?? '#fbbf24'
+    if (this.activeTab === 'nist' && this.nistLines.length === 0 && !this.nistLoading && this.element) {
+      this.fetchNistData()
+    }
   }
 
   private render(): void {

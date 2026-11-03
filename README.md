@@ -96,9 +96,14 @@ Designed for researchers, educators, and university students, ELEMENTA covers at
 
 ---
 
-### 6. 🌐 3D VSEPR & Vibrational Spectroscopy (`/mo.html`)
+### 6. 🌐 3D VSEPR, Vibrational Spectroscopy & Chemical Kinetics (`/mo.html`)
 - **VSEPR Geometries**: Steric numbers 2 to 6, lone pair angular repulsion, and net dipole cancellation.
 - **FTIR & Raman Spectrometer**: Normal vibration modes with Center-of-Mass conservation ($\sum m_i \Delta \mathbf{r}_i = \mathbf{0}$) and strict Rule of Mutual Exclusion for centrosymmetric molecules ($C_i, D_{\infty h}, O_h, D_{4h}$).
+- **Reaction Kinetics & PES Transition State Lab (`/mo.html?tab=kinetics`)**:
+  - **Arrhenius & Eyring TST**: $k(T) = A \exp(-E_a/RT) = \kappa \frac{k_B T}{h} \exp(\Delta S^\ddagger/R) \exp(-\Delta H^\ddagger/RT)$.
+  - **Maxwell-Boltzmann Collision Tails**: Visual $f(E)$ distributions showing fraction exceeding $E_a$ and catalytic barrier lowering.
+  - **Walden Inversion & Intrinsic Reaction Coordinate**: Dynamic trajectory through planar transition state for $S_N2$, Diels-Alder, Pt-catalysis, and ozone destruction.
+  - **Integrated Rate Laws**: Zeroth, first, and second-order time evolution with exact half-life $t_{1/2}$ and mass conservation.
 
 ---
 
@@ -114,7 +119,8 @@ Designed for researchers, educators, and university students, ELEMENTA covers at
 All physics, mathematics, and numerical algorithms are continuously validated against evaluated empirical datasets (NIST, IAEA, CODATA):
 
 ```bash
-# Run all 8 test suites
+# Run all 9 test suites
+npx tsx scripts/test-kinetics.ts
 npx tsx scripts/test-zeeman-stark.ts
 npx tsx scripts/test-shielding.ts
 npx tsx scripts/test-semf.ts
@@ -127,16 +133,17 @@ npx tsx scripts/test-vsepr.ts
 
 ```
 === TEST SUMMARY ===
-✓ Zeeman & Stark Quantum Splitting: 24 / 24 passed
-✓ Radiation Shielding Lab:         20 / 20 passed
-✓ Liquid-Drop SEMF & Fission:      22 / 22 passed
-✓ Bateman Decay Simulator:         16 / 16 passed
-✓ Stellar Nucleosynthesis:         17 / 17 passed
-✓ Molecular Vibrations Lab:        44 / 44 passed
-✓ Solid-State Crystallography:     21 / 21 passed
-✓ 3D VSEPR Molecular Geometry:     17 / 17 passed
+✓ Chemical Kinetics & Transition State: 21 / 21 passed
+✓ Zeeman & Stark Quantum Splitting:     24 / 24 passed
+✓ Radiation Shielding Lab:              20 / 20 passed
+✓ Liquid-Drop SEMF & Fission:           22 / 22 passed
+✓ Bateman Decay Simulator:              16 / 16 passed
+✓ Stellar Nucleosynthesis:              17 / 17 passed
+✓ Molecular Vibrations Lab:             44 / 44 passed
+✓ Solid-State Crystallography:          21 / 21 passed
+✓ 3D VSEPR Molecular Geometry:          17 / 17 passed
 ===================================================
-Total: 181 passed, 0 failed (100% pass rate)
+Total: 202 passed, 0 failed (100% pass rate)
 ```
 
 ---

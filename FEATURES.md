@@ -92,6 +92,34 @@
   - **Raman**: Upright inelastic scattering peaks ($0 \to 4000\,\text{cm}^{-1}$).
   - Interactive peak pins: Clicking any peak in the spectrum immediately focuses and animates that mode in 3D.
 
+### 2.3 Reaction Kinetics & Potential Energy Surface (PES) Transition State Lab (`/mo.html?tab=kinetics`)
+- **Arrhenius Law & Eyring Transition State Theory (TST)**:
+  - Temperature-dependent rate constant:
+    $$k(T) = A \exp\left(-\frac{E_a}{RT}\right)$$
+  - Eyring-Polanyi formulation:
+    $$k(T) = \kappa \frac{k_B T}{h} \exp\left(-\frac{\Delta G^\ddagger}{RT}\right) = \kappa \frac{k_B T}{h} \exp\left(\frac{\Delta S^\ddagger}{R}\right) \exp\left(-\frac{\Delta H^\ddagger}{RT}\right)$$
+    with $\Delta H^\ddagger = E_a - RT$ and Gibbs free energy of activation $\Delta G^\ddagger$.
+- **Maxwell-Boltzmann Molecular Collision Distribution**:
+  - Energy probability density function:
+    $$f(E) = 2 \sqrt{\frac{E}{\pi}} \left(\frac{1}{k_B T}\right)^{3/2} \exp\left(-\frac{E}{k_B T}\right)$$
+  - Live shaded energetic tail highlighting the fraction of molecular collisions exceeding the activation threshold ($E \ge E_a$), demonstrating exponential Arrhenius temperature sensitivity.
+- **1D Reaction Coordinate Profile $V(s)$ & Barrier Lowering**:
+  - Continuous energy curve $V(s)$ along the Intrinsic Reaction Coordinate (IRC) connecting reactants ($s = -1$), the saddle-point transition state ($s = 0, V = E_a$), and products ($s = +1, V = \Delta H_{\text{rxn}}$).
+  - Catalytic mechanism toggle demonstrating activation energy reduction ($\Delta E_a$) and massive kinetic acceleration ($>10^5\times$).
+- **Molecular Collision Geometry & Walden Inversion**:
+  - Dynamic molecular visualization along the reaction coordinate with synchronized trajectory scrubber.
+  - Exemplary $S_N2$ Walden inversion ($\text{OH}^- + \text{CH}_3\text{Br} \to [\text{HO}\cdots\text{CH}_3\cdots\text{Br}]^\ddagger \to \text{CH}_3\text{OH} + \text{Br}^-$) exhibiting umbrella inversion through a planar trigonal bipyramidal transition state.
+  - Comprehensive reaction presets:
+    1. $S_N2$ Nucleophilic Substitution (Walden Inversion)
+    2. Hydrogen Atom Abstraction ($\text{H} + \text{H}_2 \to \text{H}_2 + \text{H}$)
+    3. Diels-Alder Cycloaddition (1,3-Butadiene + Ethylene)
+    4. Heterogeneous Catalysis (Ethylene Hydrogenation over $\text{Pt}$)
+    5. Stratospheric Ozone Depletion ($\text{Cl}^\bullet + \text{O}_3 \to \text{ClO}^\bullet + \text{O}_2$)
+- **Integrated Concentration Rate Laws**:
+  - Integrated rate laws for zeroth, first, and second-order chemical kinetics.
+  - Exact half-life calculation: $t_{1/2} = \frac{\ln 2}{k}$ for 1st order; $t_{1/2} = \frac{1}{k [A]_0}$ for 2nd order.
+  - Mass conservation validation: $[A](t) + [P](t) = [A]_0$.
+
 ---
 
 ## ⚛️ 3. Quantum Mechanical Orbital Laboratory (`/orbitals.html`)

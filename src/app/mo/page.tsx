@@ -7,6 +7,7 @@ import {
 } from '@/lib/periodic/vsepr'
 import '@/components/mo/vsepr-element'
 import { VibrationsLabNexus } from '@/components/mo/VibrationsLabNexus'
+import { KineticsLabNexus } from '@/components/mo/KineticsLabNexus'
 import { ElementaLogo } from '@/components/ElementaLogo'
 import { GitHubLink } from '@/components/GitHubLink'
 
@@ -58,7 +59,13 @@ const params = new URLSearchParams(window.location.search)
 const initialTab = params.get('tab')
 
 const state = reactive({
-  tab: (initialTab === 'diatomic' ? 'diatomic' : initialTab === 'vibrations' ? 'vibrations' : 'vsepr') as 'vsepr' | 'diatomic' | 'vibrations',
+  tab: (initialTab === 'diatomic'
+    ? 'diatomic'
+    : initialTab === 'vibrations'
+    ? 'vibrations'
+    : initialTab === 'kinetics'
+    ? 'kinetics'
+    : 'vsepr') as 'vsepr' | 'diatomic' | 'vibrations' | 'kinetics',
   // Diatomic state
   zA: 7,
   zB: 7,
@@ -91,7 +98,7 @@ export default function MoBuilderPage(): VNode {
         ElementaLogo({ size: 26 }),
         H('h1', { class: 'text-[15px] font-bold tracking-[0.2em] text-zinc-100 uppercase' }, 'MO & ', H('span', { class: 'text-amber-400' }, 'MOLECULAR'), ' LAB'),
       ),
-      H('span', { class: 'hidden font-mono text-[10px] text-zinc-500 md:inline' }, '3D VSEPR spatial geometries · Diatomic MO diagrams · Harmonic molecular vibrations & FTIR / Raman spectra'),
+      H('span', { class: 'hidden font-mono text-[10px] text-zinc-500 md:inline' }, '3D VSEPR spatial geometries · Diatomic MO diagrams · Harmonic molecular vibrations · Reaction kinetics & PES transition states'),
       H('div', { class: 'ml-auto flex items-center gap-2' },
         H('a', { href: './orbitals.html', class: 'rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20' }, 'Orbital lab ↗'),
         H('a', { href: './segre.html', class: 'rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-400/20' }, 'Segrè chart ↗'),
@@ -153,6 +160,22 @@ export default function MoBuilderPage(): VNode {
           },
           '〰️ Vibrations & Spectra',
         ),
+        H(
+          'button',
+          {
+            type: 'button',
+            onClick: () => {
+              state.tab = 'kinetics'
+              window.history.replaceState(null, '', '?tab=kinetics')
+            },
+            class: `flex items-center gap-1.5 rounded px-3 py-1 font-mono text-xs font-semibold transition ${
+              state.tab === 'kinetics'
+                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`,
+          },
+          '⚗️ Reaction Kinetics & Transition State',
+        ),
       ),
       H(
         'div',
@@ -161,7 +184,9 @@ export default function MoBuilderPage(): VNode {
           ? 'Steric Number (SN) = BP + LP · Net Dipole vectors (μ) · Real bond angles'
           : state.tab === 'diatomic'
           ? 'Generic second-row MO treatment · σ/π orbital ladder · Pauli & Hund rules'
-          : '3N - 6 / 3N - 5 Normal Modes · Harmonic coordinates · Rule of Mutual Exclusion · FTIR / Raman',
+          : state.tab === 'vibrations'
+          ? '3N - 6 / 3N - 5 Normal Modes · Harmonic coordinates · Rule of Mutual Exclusion · FTIR / Raman'
+          : 'Arrhenius & Eyring TST · Maxwell-Boltzmann distributions · Walden inversion IRC · Rate laws',
       ),
     ),
     // Main Body
@@ -172,7 +197,9 @@ export default function MoBuilderPage(): VNode {
         ? renderVseprView()
         : state.tab === 'diatomic'
         ? renderDiatomicView()
-        : VibrationsLabNexus(),
+        : state.tab === 'vibrations'
+        ? VibrationsLabNexus()
+        : KineticsLabNexus(),
     ),
   )
 }
