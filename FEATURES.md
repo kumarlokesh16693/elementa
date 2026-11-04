@@ -14,6 +14,10 @@
 | **`/orbitals.html`** | Quantum Mechanical Orbital Laboratory | Quantum Chemistry, Hydrogen-like Schrödinger Wavefunctions, Zeeman & Stark Splitting | `<elementa-orbital-view>`, `<elementa-zeeman-stark-modal>` |
 | **`/segre.html`** | Interactive Segrè Chart of the Nuclides | Nuclear Physics, Bateman Decay, SEMF Fission, Cosmic Nucleosynthesis, Radiation Shielding | `<elementa-segre-view>`, `<elementa-bateman-modal>`, `<elementa-semf-modal>`, `<elementa-nucleosynthesis-modal>`, `<elementa-shielding-modal>` |
 | **`/daedalus.html`** | Project Daedalus Flight Simulator | Aerothermodynamics, Hypersonic Spacecraft Atmospheric Re-entry | `<elementa-daedalus-sim>` |
+| **`/em.html`** | Electromagnetism & Maxwell's Equations Lab | Electrostatics, Magnetostatics, EM Waves, Lorentz Force | `<elementa-em-field>` |
+| **`/thermo.html`** | Thermodynamics & Heat Engines Lab | PV Diagrams, Heat-Engine Cycles, Entropy, Kinetic Theory, Blackbody Radiation | `<elementa-thermo>` |
+| **`/relativity.html`** | Special Relativity Lab | Lorentz Boosts, Length Contraction, Time Dilation, Relativistic Doppler, Muon Decay | `<elementa-relativity>` |
+| **`/quantumwave.html`** | 1D Quantum Wave Laboratory | Schrödinger Eigenstates, Heisenberg Uncertainty, Crank–Nicolson Wave Packets, Tunnelling | `<elementa-quantumwave>` |
 | **`/references.html`** | Scientific References & CODATA Constants | Physical Constants, Precision Metrology, SI Base Units | Pure `nexus-framework` virtual DOM |
 | **`/integrity.html`** | Cryptographic Data Audit & Provenance | Data Authenticity (NIST, IAEA, CODATA, IUPAC) | Pure `nexus-framework` virtual DOM |
 
@@ -248,7 +252,68 @@
 
 ---
 
-## 🛡️ 6. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## ⚡ 6. Electromagnetism & Maxwell's Equations Laboratory (`/em.html`)
+
+- **3D Field Visualization (`<elementa-em-field>`)**:
+  - **Point charge**: Coulomb field $\mathbf{E} = kq/r^2\,\hat{\mathbf{r}}$ with field vectors and field lines.
+  - **Electric dipole**: Two equal and opposite charges; dipole field pattern.
+  - **Solenoid**: Biot–Savart field from $N$ circular current loops, $\mathbf{B}$-field vectors in $yz$ and $xz$ planes.
+  - **Electromagnetic wave**: Plane wave $\mathbf{E} = E_0\sin(kz - \omega t)\,\hat{\mathbf{x}}$, $\mathbf{B} = B_0\sin(kz - \omega t)\,\hat{\mathbf{y}}$, $B_0 = E_0/c$.
+  - **Lorentz force**: $\mathbf{F} = q(\mathbf{E} + \mathbf{v} \times \mathbf{B})$ — charged particle trajectory in uniform crossed $\mathbf{E}$ (along $y$) and $\mathbf{B}$ (along $z$) fields, integrated with RK4.
+- **Maxwell's equations reference**: Gauss ($\nabla\cdot\mathbf{E} = \rho/\varepsilon_0$, $\nabla\cdot\mathbf{B} = 0$), Faraday ($\nabla\times\mathbf{E} = -\partial\mathbf{B}/\partial t$), Ampère–Maxwell ($\nabla\times\mathbf{B} = \mu_0\mathbf{J} + \mu_0\varepsilon_0\partial\mathbf{E}/\partial t$).
+- **Constants**: $c = 299{,}792{,}458$ m/s, $\varepsilon_0 = 8.854\times10^{-12}$ F/m, $\mu_0 = 4\pi\times10^{-7}$ N/A².
+- **Controls**: Animate/pause time evolution, reset time, field parameter sliders (charge, current, loops, radius, frequency, amplitude, particle charge/mass/initial velocity), color-coded field vectors ($\mathbf{E}$ cyan, $\mathbf{B}$ pink), WebGL renderer with OrbitControls.
+
+---
+
+## 🌡️ 7. Thermodynamics & Heat Engines Laboratory (`/thermo.html`)
+
+- **3D Piston-Cylinder Visualizer (`<elementa-thermo>`)**:
+  - Ideal gas in a cylinder with a movable piston; WebGL-rendered gas molecules bounce between piston and walls.
+  - Live pressure $P = nRT/V$, temperature, and volume readouts.
+  - Overhead P–V diagram tracing the cycle path with per-process colors (isobaric, isochoric, isothermal, adiabatic).
+- **Heat-Engine Cycles**: Carnot, Otto, Diesel, Stirling. Computes heat in/out, net work, thermal efficiency $\eta$, and Carnot efficiency $\eta_c = 1 - T_c/T_h$.
+- **Cycle parameters**: Hot/cold reservoir temperatures, moles, adiabatic index $\gamma$, Diesel cutoff ratio; state-by-state P/V/T table.
+- **Kinetic theory**: Maxwell–Boltzmann most-probable, mean, and RMS molecular speeds for N₂ at the current temperature.
+- **Blackbody radiation**: Stefan–Boltzmann law $M = \sigma T^4$ and Wien's displacement law $\lambda_\max = b/T$.
+- **Controls**: Animate cycle phase, reset phase, sliders for every state variable, cycle selector.
+
+---
+
+## ⏱️ 8. Special Relativity Laboratory (`/relativity.html`)
+
+- **3D Relativistic Light Clock (`<elementa-relativity>`)**:
+  - Photon bouncing between mirrors on a moving carriage; the bounce period stretches by $\gamma = 1/\sqrt{1-\beta^2}$ — time dilation made visible.
+  - Contracting rod ($L = L_0/\gamma$) riding the carriage beside a static proper-length reference rod.
+  - Rolling photon world-line trail; spacetime diagram overlay with light cone ($x = \pm ct$), rest/moving worldlines, and primed axes ($ct'$, $x'$).
+- **Lorentz kinematics**: $\gamma$, velocity $v$ in km/s, length contraction, time dilation ($\Delta t = \gamma\Delta t_0$), proper time, contraction percentage.
+- **Relativistic dynamics**: electron/proton kinetic energy ($(\gamma-1)mc^2$), total energy $E = \gamma mc^2$, momentum $pc$, rest energy, classical $\tfrac12 mv^2$ comparison.
+- **Relativistic Doppler**: $f/f_0 = \sqrt{(1\pm\beta)/(1\mp\beta)}$ with visible **colour swatches** mapping the shifted wavelength (380–780 nm) to sRGB.
+- **Velocity addition**: $u = (u_1+u_2)/(1+u_1u_2/c^2)$ vs the classical sum, with rapidity composition.
+- **Muon decay**: survival fraction with and without time dilation over a chosen flight distance — the 1930s cosmic-ray proof.
+- **Twin paradox**: Earth vs traveller ages for a round trip at the current $\beta$.
+- **Spacetime interval**: $s^2 = (ct)^2 - x^2$ with timelike / spacelike / lightlike classification.
+- **Controls**: $\beta$ slider (0–0.999c), proper length, source wavelength, clock pause, photon-trail and rod visibility toggles.
+
+---
+
+## 🌊 9. 1D Quantum Wave Laboratory (`/quantumwave.html`)
+
+- **3D Probability Waterfall (`<elementa-quantumwave>`)**:
+  - A surface whose rows are the *history* of the evolving wave: animated Re ψ(x, t) for wave packets, or ψₙ(x)·cos(ωt) for stationary states (display frequency rises monotonically with Eₙ).
+  - Positive lobes rendered cyan, negative lobes pink (vertex-coloured grid updated per frame); the potential profile is extruded as an amber ribbon behind the cascade.
+  - Full physics-figure overlay: V(x), dashed energy levels, ψₙ anchored at its eigenvalue, |ψ|² strip, and live ⟨E⟩ / Δx / Δp / tunnelling-fraction readouts.
+- **Four potential systems**: infinite well (Eₙ = n²π²/W²), finite well (asymmetric PSD eigen solver, bound-state count emerges naturally), harmonic oscillator V = ½κ²x² (Eₙ = (n−½)κ√2), and a rectangular barrier with **no bound states** (interface auto-switches to packet mode).
+- **Exact eigen solver**: symmetric tridiagonal finite-difference Hamiltonian solved by LDLᵀ (Sturm-sequence) sign-count bisection at ~1e-12 relative precision; eigenfunctions by guarded inverse iteration (Thomas algorithm, ε-shifted).
+- **Heisenberg uncertainty panel**: nodes, ⟨x⟩, Δx, ⟨p⟩, Δp and the product Δx·Δp / (ħ/2) per state — the bound is violated nowhere, equality only for the oscillator's Gaussian ground state.
+- **Unitary Crank–Nicolson evolution**: (I + iΔtH/2)ψ⁺ = (I − iΔtH/2)ψ solved with a complex Thomas sweep over the interior; norm conserved to ~1e-9 per step and ⟨E⟩ drift typically <0.05% over hundreds of seconds of simulated time.
+- **Gaussian wave packets**: tunable mean energy E₀ and width σ₀ (Δp = ħ/2σ₀); packets spread, reflect and rephase inside the box, and tunnel through the barrier — the live transmitted fraction is compared to the exact analytic T(E₀) = [1 + V₀²sinh²(κW)/(4E₀(V₀−E₀))]⁻¹.
+- **Physical units**: internal ħ²/2mₑ = 1 with energy scale ħ²/2mₑL² at an adjustable length scale L (0.2–2.5 nm) — e.g. the well spectrum maps to real electron level spacings in the eV regime.
+- **Interactive**: click any spectrum row to display that state, sliders for width / depth / curvature / barrier geometry, evolution-speed and pause controls, packet re-launch.
+
+---
+
+## 🛡️ 10. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).
@@ -259,7 +324,7 @@
 
 ---
 
-## ⚡ 7. Technology Stack & Framework Purity
+## ⚡ 11. Technology Stack & Framework Purity
 
 - **Core Engine**: Pure **`nexus-framework`** (`mount`, `patch`, `effect`, `reactive`, `h`, `VNode`).
 - **3D Graphics**: **`@nexus/3d`** WebGL hardware-accelerated rendering.

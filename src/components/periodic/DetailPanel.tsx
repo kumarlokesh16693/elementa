@@ -5,6 +5,8 @@ import { configToSuperscript, fmt, heatForField, heatT, hexWithAlpha, kelvinToC,
 import { ISOTOPES, chainsForElement } from '@/lib/periodic/isotopes'
 import { DATASET_MAP, MODEL_TIERS, TIER_META, datasetFor, massInterval, massLabel, methodFor, sourceLine, uncertaintyNote } from '@/lib/provenance'
 import { copyText, download, toCSV } from '@/lib/citation'
+import IsotopeModal from '@/components/periodic/IsotopeModal'
+import { getPhaseAtTemperature, formatTemp } from '@/lib/periodic/temperature'
 
 type ModelKind = '2d' | 'qm' | 'spectra' | '3d' | 'crystal'
 
@@ -57,13 +59,14 @@ function section(title: string, accent: string, ...children: any[]): VNode {
     ...children)
 }
 
-export default function DetailPanel({ element: el, accent, open, compareSelected, onToggleCompare, compareFull }: {
+export default function DetailPanel({ element: el, accent, open, compareSelected, onToggleCompare, compareFull, simulatedTemp }: {
   element: ElementData
   accent: string
   open: boolean
   compareSelected: boolean
   onToggleCompare: () => void
   compareFull: boolean
+  simulatedTemp?: number | null
 }): VNode {
   if (!open) return H('span', { class: 'hidden' })
 
@@ -222,6 +225,15 @@ export default function DetailPanel({ element: el, accent, open, compareSelected
       section('Physical properties', accent,
         H('div', { class: 'grid grid-cols-2 gap-1.5' },
           prop('Phase at STP', el.phase, 'phase'),
+          simulatedTemp != null ? H('div', { class: 'col-span-2 rounded border border-white/10 bg-white/[0.02] p-2' },
+            H('div', { class: 'flex items-center justify-between text-[10.5px]' },
+              H('span', { class: 'text-zinc-400' }, 'State at ' + formatTemp(simulatedTemp)),
+              H('span', { class: 'font-semibold', style: { color: getPhaseAtTemperature(el, simulatedTemp).color } },
+                getPhaseAtTemperature(el, simulatedTemp).icon + ' ' + getPhaseAtTemperature(el, simulatedTemp).label
+              ),
+            ),
+            getPhaseAtTemperature(el, simulatedTemp).transitionInfo ? H('p', { class: 'mt-1 text-[9.5px] text-zinc-400 font-mono' }, getPhaseAtTemperature(el, simulatedTemp).transitionInfo) : null,
+          ) : null,
           prop('Density', el.density == null ? '-' : el.density + ' g/cm3', 'density'),
           prop('Melting point', el.meltingPoint == null ? '-' : el.meltingPoint + ' K ' + kelvinToC(el.meltingPoint), 'meltingPoint'),
           prop('Boiling point', el.boilingPoint == null ? '-' : el.boilingPoint + ' K ' + kelvinToC(el.boilingPoint), 'boilingPoint'),
@@ -349,5 +361,13 @@ export default function DetailPanel({ element: el, accent, open, compareSelected
       ),
       body,
     ),
+    panel.isotopeOpen
+      ? IsotopeModal({
+          element: el,
+          accent,
+          open: panel.isotopeOpen,
+          onClose: () => { panel.isotopeOpen = false },
+        })
+      : null,
   )
 }

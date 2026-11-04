@@ -13,6 +13,8 @@ import DetailPanel from '@/components/periodic/DetailPanel'
 import IonizationChart from '@/components/periodic/IonizationChart'
 import CompareElements from '@/components/periodic/CompareElements'
 import ResearchPanel from '@/components/periodic/ResearchPanel'
+import TemperatureBar from '@/components/periodic/TemperatureBar'
+import type { SimulatedPhase, TempUnit } from '@/lib/periodic/temperature'
 import { ElementaLogo } from '@/components/ElementaLogo'
 import { GitHubLink } from '@/components/GitHubLink'
 
@@ -33,6 +35,7 @@ type SavedView = {
   cmp: number[]
   prop: CompareProp
   palette: PaletteId
+  temp?: number
 }
 
 const COMPARE_PROPS: CompareProp[] = ['mass', 'electronegativity', 'ionizationEnergy', 'electronAffinity', 'atomicRadius', 'meltingPoint', 'boilingPoint', 'density', 'valence']
@@ -47,8 +50,14 @@ function intParam(name: string, min: number, max: number): number | null {
   return Number.isFinite(value) && value >= min && value <= max ? value : null
 }
 
+function floatParam(name: string, min: number, max: number): number | null {
+  const value = Number.parseFloat(params.get(name) ?? '')
+  return Number.isFinite(value) && value >= min && value <= max ? value : null
+}
+
 const eParam = intParam('e', 1, 118)
 const validDeepLink = eParam != null
+const tempParam = floatParam('t', 0, 10000) ?? 298.15
 
 function validMode(value: string | null): ColorMode {
   const found = COLOR_MODES.find((mode) => mode.key === value)
@@ -105,14 +114,66 @@ const state = reactive({
   focused: false,
   showIonizationChart: params.get('chart') === '1',
   compared: compareParam(),
-  compareOpen: params.get('compare') === '1' && compareParam().length >= 2,
+  compareOpen: params.get('compare') === '1' && compareParam().length >= 1,
   compareProperty: propParam(),
   palette: validPalette(params.get('palette')),
   researchOpen: false,
   saved: loadSaved(),
   savedOpen: false,
   savedNote: '',
+  tempK: tempParam,
+  tempUnit: 'K' as TempUnit,
+  tempPlaying: false,
+  tempPlayDirection: 1 as 1 | -1,
+  tempPlaySpeed: 1,
+  tempPhaseFilter: null as SimulatedPhase | null,
+  tempSimulatorOpen: params.get('sim') !== '0',
 })
+
+let tempAnimTimer: number | null = null
+function startThermalAnimation(): void {
+  if (tempAnimTimer) return
+  let lastTime = performance.now()
+  const step = () => {
+    if (!state.tempPlaying) {
+      tempAnimTimer = null
+      return
+    }
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - lastTime) / 1000)
+    lastTime = now
+
+    const rate = Math.max(15, state.tempK * 0.08) * state.tempPlaySpeed * dt
+    let next = state.tempK + state.tempPlayDirection * rate
+
+    if (next >= 6000) {
+      next = 6000
+      state.tempPlaying = false
+    } else if (next <= 0) {
+      next = 0
+      state.tempPlaying = false
+    }
+
+    state.tempK = Math.round(next * 10) / 10
+    if (state.tempPlaying) {
+      tempAnimTimer = window.requestAnimationFrame(step)
+    } else {
+      tempAnimTimer = null
+    }
+  }
+  tempAnimTimer = window.requestAnimationFrame(step)
+}
+
+function toggleThermalPlay(dir?: 1 | -1): void {
+  if (dir !== undefined && (dir !== state.tempPlayDirection || !state.tempPlaying)) {
+    state.tempPlayDirection = dir
+    state.tempPlaying = true
+    startThermalAnimation()
+  } else {
+    state.tempPlaying = !state.tempPlaying
+    if (state.tempPlaying) startThermalAnimation()
+  }
+}
 
 window.addEventListener('elementa-detail-close', () => { state.panelOpen = false })
 window.addEventListener('elementa-open-research', () => { state.researchOpen = true })
@@ -137,8 +198,13 @@ function toggleCat(key: CategoryKey): void {
 }
 
 function toggleCompare(atomicNumber: number): void {
-  if (state.compared.includes(atomicNumber)) state.compared = state.compared.filter((z) => z !== atomicNumber)
-  else if (state.compared.length < 4) state.compared = [...state.compared, atomicNumber]
+  if (state.compared.includes(atomicNumber)) {
+    state.compared = state.compared.filter((z) => z !== atomicNumber)
+    if (state.compared.length === 0) state.compareOpen = false
+  } else if (state.compared.length < 4) {
+    state.compared = [...state.compared, atomicNumber]
+    if (state.compared.length >= 2) state.compareOpen = true
+  }
 }
 
 function snapshot(): Record<string, unknown> {
@@ -152,6 +218,7 @@ function snapshot(): Record<string, unknown> {
     compared: state.compared,
     compareProperty: state.compareProperty,
     palette: state.palette,
+    temp: state.tempK,
   }
 }
 
@@ -168,6 +235,8 @@ function writeUrl(): void {
   if (state.compareOpen) next.set('compare', '1')
   if (state.compareProperty !== 'ionizationEnergy') next.set('prop', state.compareProperty)
   if (state.palette !== 'default') next.set('palette', state.palette)
+  if (Math.abs(state.tempK - 298.15) > 0.1) next.set('t', String(state.tempK))
+  if (!state.tempSimulatorOpen) next.set('sim', '0')
   const url = `${window.location.pathname}${next.toString() ? `?${next}` : ''}`
   if (url !== lastUrl) {
     lastUrl = url
@@ -186,6 +255,7 @@ function applySaved(view: SavedView): void {
   state.compared = view.cmp
   state.compareProperty = view.prop
   state.palette = view.palette
+  if (view.temp != null) state.tempK = view.temp
   state.savedOpen = false
   state.savedNote = `Restored “${view.name}”`
   window.setTimeout(() => { state.savedNote = '' }, 2200)
@@ -303,6 +373,13 @@ function HomePage(): VNode {
     'aria-expanded': String(state.savedOpen),
   }, `saved views${state.saved.length ? ` (${state.saved.length})` : ''}`))
 
+  legends.push(H('button', {
+    type: 'button',
+    onClick: () => { state.tempSimulatorOpen = !state.tempSimulatorOpen },
+    class: `shrink-0 flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-medium transition cursor-pointer ${state.tempSimulatorOpen ? 'border-amber-400/50 bg-amber-400/15 text-amber-300' : 'border-white/10 text-zinc-400 hover:text-zinc-200'}`,
+    title: 'Toggle Real-Time State of Matter & Thermal Simulator',
+  }, '🌡️ Thermal Sim', Math.abs(state.tempK - 298.15) > 0.1 ? H('span', { class: 'rounded px-1 bg-amber-400/20 text-amber-200 text-[9px] font-mono' }, `${state.tempK.toFixed(0)} K`) : null))
+
   if (state.savedNote) legends.push(H('span', { class: 'shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300', 'aria-live': 'polite' }, state.savedNote))
 
   const suggestions = state.focused && state.query.trim()
@@ -370,27 +447,77 @@ function HomePage(): VNode {
         class: 'shrink-0 rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 transition hover:bg-sky-400/20',
         title: 'Dataset provenance, citations, unit converter and exports',
       }, 'Data & cite'),
-      H('button', { type: 'button', disabled: state.compared.length < 2, onClick: () => { state.compareOpen = true }, class: 'shrink-0 rounded-md border border-emerald-400/30 bg-emerald-400/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-400/10 disabled:cursor-not-allowed disabled:opacity-40', title: state.compared.length < 2 ? 'Add at least two elements from their detail panels' : 'Open element comparison' }, `Compare ${state.compared.length}/4`),
+      H('button', {
+        type: 'button',
+        onClick: () => {
+          if (state.compared.length === 0) {
+            state.compared = [selectedEl.number]
+          }
+          state.compareOpen = true
+        },
+        class: 'shrink-0 rounded-md border border-emerald-400/30 bg-emerald-400/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 transition hover:bg-emerald-400/10',
+        title: 'Open element comparison lab',
+      }, `Compare ${state.compared.length}/4`),
       actionButton('MO builder', './mo.html', 'border-amber-400/40 bg-amber-400/10 text-amber-300'),
       actionButton('Orbital lab', './orbitals.html', 'border-sky-400/40 bg-sky-400/10 text-sky-300'),
+      actionButton('EM lab', './em.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
+      actionButton('Thermo lab', './thermo.html', 'border-fbbf24/40 bg-fbbf24/10 text-fbbf24'),
+      actionButton('Relativity lab', './relativity.html', 'border-violet-400/40 bg-violet-400/10 text-violet-300'),
+      actionButton('Quantum wave lab', './quantumwave.html', 'border-f472b6/40 bg-f472b6/10 text-f472b6'),
       actionButton('Segrè chart', './segre.html', 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'),
       GitHubLink()),
     H('div', { class: 'print-hide z-10 flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#080c14] px-4' }, legends),
     H('main', { class: 'relative flex-1 overflow-auto' },
       H('div', { class: 'flex min-h-full flex-col items-center p-4 lg:p-6', style: { background: 'radial-gradient(1100px 520px at 50% -8%, rgba(251,191,36,0.05), transparent 70%)' } },
-        PeriodicTable({ selected: state.selectedZ, onSelect: (el) => select(el.number), colorMode: state.colorMode, palette: state.palette, matches, activeCategories: state.activeCats, originFilter: state.colorMode === 'origins' ? state.originFilter : null }),
+        state.tempSimulatorOpen ? TemperatureBar({
+          tempK: state.tempK,
+          unit: state.tempUnit,
+          isPlaying: state.tempPlaying,
+          playDirection: state.tempPlayDirection,
+          playSpeed: state.tempPlaySpeed,
+          activePhaseFilter: state.tempPhaseFilter,
+          onTempChange: (k) => { state.tempK = k },
+          onUnitChange: (u) => { state.tempUnit = u },
+          onTogglePlay: (dir) => toggleThermalPlay(dir),
+          onSpeedChange: (s) => { state.tempPlaySpeed = s },
+          onPhaseFilterChange: (p) => { state.tempPhaseFilter = p },
+          onReset: () => {
+            state.tempK = 298.15
+            state.tempPlaying = false
+            state.tempPhaseFilter = null
+          },
+        }) : null,
+        PeriodicTable({
+          selected: state.selectedZ,
+          onSelect: (el) => select(el.number),
+          colorMode: state.colorMode,
+          palette: state.palette,
+          matches,
+          activeCategories: state.activeCats,
+          originFilter: state.colorMode === 'origins' ? state.originFilter : null,
+          simulatedTemp: state.tempK,
+          activePhaseFilter: state.tempPhaseFilter,
+        }),
         H('button', { type: 'button', onClick: () => { state.showIonizationChart = !state.showIonizationChart }, 'aria-expanded': String(state.showIonizationChart), class: 'print-hide mt-4 rounded-md border border-amber-400/30 bg-amber-400/[0.06] px-3 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-400/10' }, state.showIonizationChart ? 'Hide ionization chart ↑' : 'Show ionization chart ↓'),
         state.showIonizationChart ? IonizationChart({ selected: state.selectedZ, onSelect: (el) => select(el.number) }) : null,
         H('p', { class: 'mt-5 max-w-[880px] text-center text-[10px] leading-relaxed text-zinc-600' },
           'Reference values follow IUPAC conventions — Pauling electronegativity, first ionization energy in eV, electron affinity in kJ/mol, empirical radii in pm (calculated for noble gases), temperatures in K, densities at STP. Interval atomic weights are shown as [low–high]; bracketed values apply to Tc, Pm and Z ≥ 84. Radioactive nuclides are flagged with a dot. ',
           H('a', { href: './references.html', class: 'text-sky-500/80 underline decoration-dotted hover:text-sky-300' }, 'Sources, versions and model tiers →')))),
-    DetailPanel({ element: selectedEl, accent, open: state.panelOpen, compareSelected: state.compared.includes(selectedEl.number), compareFull: state.compared.length >= 4, onToggleCompare: () => toggleCompare(selectedEl.number) }),
-    state.compareOpen && state.compared.length >= 2 ? CompareElements({
+    DetailPanel({ element: selectedEl, accent, open: state.panelOpen, compareSelected: state.compared.includes(selectedEl.number), compareFull: state.compared.length >= 4, simulatedTemp: state.tempK, onToggleCompare: () => toggleCompare(selectedEl.number) }),
+    state.compareOpen && state.compared.length >= 1 ? CompareElements({
       elements: state.compared.map((z) => getElement(z)).filter((el): el is ElementData => el != null),
       property: state.compareProperty,
       palette: state.palette,
       onPropertyChange: (property) => { state.compareProperty = property },
-      onRemove: (z) => { state.compared = state.compared.filter((item) => item !== z); if (state.compared.length < 2) state.compareOpen = false },
+      onAdd: (z) => {
+        if (!state.compared.includes(z) && state.compared.length < 4) {
+          state.compared = [...state.compared, z]
+        }
+      },
+      onRemove: (z) => {
+        state.compared = state.compared.filter((item) => item !== z)
+        if (state.compared.length === 0) state.compareOpen = false
+      },
       onClose: () => { state.compareOpen = false },
     }) : null,
     savedPanel,

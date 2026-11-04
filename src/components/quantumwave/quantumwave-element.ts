@@ -1,0 +1,811 @@
+/**
+ * ELEMENTA — 1D Quantum Wave Laboratory
+ * Custom Web Component:
+ *   • WebGL (@nexus/3d): probability "waterfall" — a surface whose rows are the
+ *     history of the evolving wave (Re ψ for packets; ψₙ·cos(ωt) for stationary
+ *     states, whose displayed frequency rises with Eₙ). Behind it, the potential
+ *     profile is extruded as a ribbon.
+ *   • 2D canvas overlay: the textbook figure — V(x), energy levels, ψ / |ψ|²,
+ *     live observables (⟨E⟩, Δx, Δp, ΔxΔp, barrier when present).
+ *
+ * Physics by @/lib/quantum (finite-difference eigen solver + Crank–Nicolson).
+ */
+
+import {
+  AmbientLight,
+  BufferGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  Object3D,
+  OrbitControls,
+  PerspectiveCamera,
+  Scene,
+  WebGLRenderer,
+} from '@nexus/3d'
+import {
+  barrierTransmission,
+  buildGrid,
+  cnScratch,
+  countNodes,
+  eigenPairs,
+  evolvePacket,
+  evScale,
+  makePacket,
+  observables,
+  regionProbs,
+  renormalise,
+  type Grid,
+  type Observables,
+  type Packet,
+  type SystemKey,
+} from '@/lib/quantum'
+
+const N_GRID = 512
+const COLS = 256
+const ROWS = 88
+const STRIDE = N_GRID / COLS
+
+const SURF_W = 12 // world x extent of the waterfall
+const WATER_D = 5.2 // world z extent (time direction)
+const AMP_H = 2.1 // max wave height in world units
+const V_RIBBON_H = 2.0 // potential ribbon height at max V
+const RIBBON_Z = -(WATER_D / 2 + 0.42)
+
+const EIGEN_LEVELS = 10
+
+export class ElementaQuantumWaveElement extends HTMLElement {
+  private renderer: WebGLRenderer | null = null
+  private scene: Scene | null = null
+  private camera: PerspectiveCamera | null = null
+  private controls: OrbitControls | null = null
+  private raf = 0
+  private ro: ResizeObserver | null = null
+  private group: Object3D | null = null
+  private overlay: HTMLCanvasElement | null = null
+  private cameraReady = false
+
+  // surface geometry (persistent; updated per frame)
+  private surfMesh: Mesh | null = null
+  private ribbonMesh: Mesh | null = null
+  private surfPos: Float32Array = new Float32Array(ROWS * COLS * 3)
+  private surfCol: Float32Array = new Float32Array(ROWS * COLS * 3)
+  private hist = new Float32Array(ROWS * COLS)
+  private histMax = 0
+
+  // solver state
+  private grid: Grid | null = null
+  private packet: Packet | null = null
+  private scratch: ReturnType<typeof cnScratch> | null = null
+  private eigenE: number[] = []
+  private psi: Float64Array | null = null
+  private psiNodes = 0
+
+  // last packet observables
+  private obs: Observables | null = null
+  private obsLeft = 0
+  private obsInside = 0
+  private obsRight = 0
+
+  // public state (page-driven)
+  public system: SystemKey = 'well'
+  public width = 10
+  public depth = 2
+  public barrierWidth = 2
+  public kappa = 0.6
+  public nState = 1
+  public mode: 'eigen' | 'packet' = 'eigen'
+  public speed = 1
+  public sigma = 1.6
+  public packetE = 1
+  public lengthNm = 1
+  public animating = true
+
+  private phaseT = 0
+  private simT = 0
+  private lastSeed: string | null = null
+  private lastGeoSig = ''
+
+  static get observedAttributes(): string[] {
+    return [
+      'data-system', 'data-width', 'data-depth', 'data-barrier-width', 'data-kappa',
+      'data-n', 'data-mode', 'data-speed', 'data-sigma', 'data-energy', 'data-length',
+      'data-anim', 'data-reset',
+    ]
+  }
+
+  connectedCallback(): void {
+    if (this.renderer) return
+    this.initScene()
+    this.readAttributes()
+    this.rebuild(true)
+  }
+
+  disconnectedCallback(): void {
+    this.teardown()
+  }
+
+  attributeChangedCallback(): void {
+    if (!this.renderer) return
+    this.readAttributes()
+    this.rebuild(false)
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  private initScene(): void {
+    this.style.position = 'relative'
+    this.style.display = 'block'
+    this.style.width = '100%'
+    this.style.height = '100%'
+
+    const renderer = new WebGLRenderer({ antialias: true, alpha: true })
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.domElement.style.position = 'absolute'
+    renderer.domElement.style.inset = '0'
+    renderer.domElement.style.width = '100%'
+    renderer.domElement.style.height = '100%'
+    renderer.domElement.style.touchAction = 'none'
+    this.appendChild(renderer.domElement)
+    this.renderer = renderer
+
+    const scene = new Scene()
+    const camera = new PerspectiveCamera(45, 1, 0.05, 400)
+
+    const controls = new OrbitControls(camera, renderer.domElement)
+    controls.enableDamping = true
+    controls.dampingFactor = 0.08
+    this.scene = scene
+    this.camera = camera
+    this.controls = controls
+
+    scene.add(new AmbientLight(0xffffff, 0.7))
+
+    // Physics-figure overlay (left).
+    const overlay = document.createElement('canvas')
+    overlay.style.position = 'absolute'
+    overlay.style.top = '10px'
+    overlay.style.left = '10px'
+    overlay.style.bottom = '10px'
+    overlay.style.width = '55%'
+    overlay.style.height = 'calc(100% - 20px)'
+    overlay.style.pointerEvents = 'none'
+    overlay.style.borderRadius = '12px'
+    overlay.style.border = '1px solid rgba(255,255,255,0.10)'
+    overlay.style.background = 'rgba(8,12,20,0.88)'
+    overlay.style.zIndex = '2'
+    this.appendChild(overlay)
+    this.overlay = overlay
+
+    const resize = () => {
+      const w = this.clientWidth || 1
+      const h = this.clientHeight || 1
+      renderer.setSize(w, h, false)
+      camera.aspect = w / h
+      camera.updateProjectionMatrix()
+      this.drawOverlay()
+    }
+    resize()
+    this.ro = new ResizeObserver(resize)
+    this.ro.observe(this)
+
+    const tick = (now: number) => {
+      this.raf = requestAnimationFrame(tick)
+      const dt = this.lastTime ? Math.min(0.05, (now - this.lastTime) / 1000) : 0
+      this.lastTime = now
+      this.advance(dt)
+      if (this.controls) this.controls.update()
+      renderer.render(scene, camera)
+    }
+    this.lastTime = 0
+    this.raf = requestAnimationFrame(tick)
+  }
+
+  private lastTime = 0
+
+  /* ------------------------------------------------------------------ */
+
+  private readAttributes(): void {
+    const p = (k: string, d: number): number => {
+      const raw = this.getAttribute(`data-${k}`)
+      if (raw == null || raw.trim() === '') return d
+      const v = Number(raw)
+      return Number.isFinite(v) ? v : d
+    }
+    const raw = (k: string, d: string): string => {
+      const v = this.getAttribute(`data-${k}`)
+      return v == null || v.trim() === '' ? d : v.trim()
+    }
+
+    const sys = raw('system', this.system)
+    if (['well', 'finite', 'ho', 'barrier'].includes(sys)) this.system = sys as SystemKey
+    this.width = Math.max(2, p('width', this.width))
+    this.depth = Math.max(0.2, p('depth', this.depth))
+    this.barrierWidth = Math.max(0.2, p('barrier-width', this.barrierWidth))
+    this.kappa = Math.max(0.1, p('kappa', this.kappa))
+    this.nState = Math.min(EIGEN_LEVELS, Math.max(1, Math.round(p('n', this.nState))))
+    const m = raw('mode', this.mode)
+    this.mode = m === 'packet' ? 'packet' : m === 'eigen' ? 'eigen' : this.mode
+    // barriers scatter — a stationary view would be meaningless
+    if (this.system === 'barrier') this.mode = 'packet'
+    this.speed = Math.max(0, Math.min(4, p('speed', this.speed)))
+    this.sigma = Math.max(0.35, Math.min(4, p('sigma', this.sigma)))
+    this.packetE = Math.max(0.05, p('energy', this.packetE))
+    this.lengthNm = Math.max(0.05, p('length', this.lengthNm))
+    const a = this.getAttribute('data-anim')
+    if (a != null) {
+      const t = a.trim().toLowerCase()
+      this.animating = t !== 'false' && t !== '0'
+    }
+  }
+
+  /** Geometry signature: everything that invalidates the solver. */
+  private geoSig(): string {
+    return `${this.system}|${this.width.toFixed(4)}|${this.depth.toFixed(4)}|${this.barrierWidth.toFixed(4)}|${this.kappa.toFixed(4)}`
+  }
+
+  /** Re-solve and (optionally) rebuild the 3D furniture. */
+  private rebuild(full: boolean): void {
+    const sig = this.geoSig()
+    const geoChanged = sig !== this.lastGeoSig
+    const seedAttr = this.getAttribute('data-reset')
+    const seedChanged = seedAttr != null && seedAttr !== this.lastSeed
+    this.lastSeed = seedAttr
+
+    if (full || geoChanged) {
+      this.lastGeoSig = sig
+      this.grid = buildGrid(
+        {
+          system: this.system,
+          boxHalf: this.system === 'well' ? this.width / 2 : 22,
+          width: this.width,
+          depth: this.depth,
+          barrierWidth: this.barrierWidth,
+          kappa: this.kappa,
+        },
+        N_GRID,
+      )
+      const pairs = eigenPairs(this.grid, EIGEN_LEVELS)
+      this.eigenE = pairs.energies
+      this.psiVectors = pairs.vectors
+      this.scratch = cnScratch(N_GRID)
+      this.reinitPacket()
+      this.clearWaterfall()
+      this.buildScene()
+    } else if (seedChanged) {
+      this.reinitPacket()
+      this.clearWaterfall()
+    }
+
+    // selected stationary state
+    const idx = Math.min(EIGEN_LEVELS, Math.max(1, this.nState)) - 1
+    const e = this.eigenE[idx]
+    this.psi = Number.isFinite(e) ? (this.psiVectors ? this.psiVectors[idx] : null) : null
+    this.psiNodes = this.psi ? countNodes(this.psi) : 0
+    // draw once now — rAF may be throttled (hidden tab) so the figure shouldn't
+    // wait for the first animate frame
+    this.updateSurface(true)
+    this.drawOverlay()
+  }
+
+  private psiVectors: Float64Array[] | null = null
+
+  private reinitPacket(): void {
+    const g = this.grid
+    if (!g) return
+    const x0 = -g.boxHalf * 0.62
+    const k0 = Math.sqrt(Math.max(1e-4, this.packetE - 1 / (4 * this.sigma * this.sigma)))
+    this.packet = makePacket(g, x0, this.sigma, k0)
+    this.simT = 0
+    this.obs = null
+    this.obsLeft = 0
+    this.obsInside = 0
+    this.obsRight = 0
+  }
+
+  private clearWaterfall(): void {
+    this.hist.fill(0)
+    this.histMax = 0
+    this.phaseT = 0
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  private buildScene(): void {
+    const scene = this.scene
+    const renderer = this.renderer
+    if (!scene || !renderer) return
+
+    const camera = this.camera!
+    const controls = this.controls!
+    if (!this.cameraReady) {
+      camera.position.set(-1.5, 5.2, 12.4)
+      controls.target.set(2.1, 0.7, -0.8)
+      controls.update()
+      this.cameraReady = true
+    }
+
+    // release previous furniture
+    if (this.group) {
+      scene.remove(this.group)
+      this.releaseTree(this.group)
+    }
+    const group = new Object3D()
+    group.name = 'quantum-content'
+    group.position.x = 3.1 // keep the physics figure side clear
+    this.group = group
+
+    // --- Probability waterfall surface ---
+    if (!this.surfMesh) {
+      const geo = new BufferGeometry()
+      geo.setAttribute('position', { array: this.surfPos, itemSize: 3 })
+      geo.setAttribute('color', { array: this.surfCol, itemSize: 3 })
+      const idx: number[] = []
+      for (let r = 0; r < ROWS - 1; r++) {
+        for (let c = 0; c < COLS - 1; c++) {
+          const a = r * COLS + c
+          idx.push(a, a + COLS, a + 1, a + 1, a + COLS, a + COLS + 1)
+        }
+      }
+      geo.setIndex(idx)
+      const mat = new MeshBasicMaterial()
+      mat.side = 'double'
+      this.surfMesh = new Mesh(geo, mat)
+    }
+    const surf = this.surfMesh
+    surf.position.set(0, 0, 0)
+    group.add(surf)
+
+    // --- Potential ribbon at the back ---
+    this.updateRibbon()
+    if (this.ribbonMesh) group.add(this.ribbonMesh)
+
+    scene.add(group)
+    this.updateSurface(true)
+  }
+
+  private updateRibbon(): void {
+    const g = this.grid
+    const group = this.group
+    if (!g || !group) return
+    if (this.ribbonMesh) {
+      group.remove(this.ribbonMesh)
+      ;(this.renderer as unknown as { releaseGeometry?: (g: unknown) => void }).releaseGeometry?.(this.ribbonMesh.geometry)
+    }
+    const geo = new BufferGeometry()
+    const pos = new Float32Array(COLS * 2 * 3)
+    const idx: number[] = []
+    let maxV = 0
+    for (let c = 0; c < COLS; c++) {
+      const v = g.v[c * STRIDE]
+      if (v > maxV) maxV = v
+    }
+    maxV = Math.max(maxV, 1e-6)
+    for (let c = 0; c < COLS; c++) {
+      const xw = (g.x[c * STRIDE] / g.boxHalf) * (SURF_W / 2)
+      const y = Math.min(1.15, g.v[c * STRIDE] / maxV) * V_RIBBON_H + 0.02
+      pos[(c * 2) * 3 + 0] = xw
+      pos[(c * 2) * 3 + 1] = 0
+      pos[(c * 2) * 3 + 2] = RIBBON_Z
+      pos[(c * 2 + 1) * 3 + 0] = xw
+      pos[(c * 2 + 1) * 3 + 1] = y
+      pos[(c * 2 + 1) * 3 + 2] = RIBBON_Z
+    }
+    for (let c = 0; c < COLS - 1; c++) {
+      const a = c * 2
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+    }
+    geo.setAttribute('position', { array: pos, itemSize: 3 })
+    geo.setIndex(idx)
+    const mat = new MeshBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.85 })
+    mat.side = 'double'
+    this.ribbonMesh = new Mesh(geo, mat)
+    group.add(this.ribbonMesh)
+  }
+
+  private releaseTree(node: Object3D): void {
+    const rel = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void }).releaseGeometry
+    node.traverse((child) => {
+      const mesh = child as unknown as { geometry?: BufferGeometry }
+      if (mesh.geometry && rel) rel(mesh.geometry)
+    })
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  private advance(dt: number): void {
+    if (!this.animating || dt <= 0 || !this.grid) return
+
+    const mode = this.mode === 'eigen' && this.psi ? 'eigen' : 'packet'
+
+    if (mode === 'eigen' && this.psi) {
+      // Stationary state: ψₙ oscillates at its (rescaled) Bohr frequency.
+      this.phaseT += dt * this.speed
+      const e = this.eigenE[Math.min(EIGEN_LEVELS, this.nState) - 1] || 0
+      const e0 = this.eigenE[0] || 0
+      const e8 = this.eigenE[Math.min(EIGEN_LEVELS, this.eigenE.length) - 1] || e0
+      const rel = e8 > e0 ? (e - e0) / (e8 - e0) : 0
+      const cyclesPerSec = 0.3 + 2.2 * rel // rescaled for visibility, monotone in Eₙ
+      const arg = 2 * Math.PI * cyclesPerSec * this.phaseT
+      const cosv = Math.cos(arg)
+      this.pushRow((j) => (this.psi ? this.psi[j * STRIDE] * cosv : 0))
+    } else if (this.packet && this.scratch) {
+      const substeps = Math.max(1, Math.round(this.speed * 8))
+      const dtSub = 0.005
+      for (let s = 0; s < substeps; s++) {
+        evolvePacket(this.packet, this.grid, dtSub, this.scratch)
+        renormalise(this.packet, this.grid.h)
+      }
+      this.simT += dtSub * substeps
+      this.obs = observables(this.packet.re, this.packet.im, this.grid.x, this.grid.v, this.grid.h)
+      if (this.system === 'barrier') {
+        const rp = regionProbs(this.packet.re, this.packet.im, this.grid.x, this.barrierWidth / 2, this.grid.h)
+        this.obsLeft = rp.left
+        this.obsInside = rp.inside
+        this.obsRight = rp.right
+      }
+      this.pushRow((j) => this.packet!.re[j * STRIDE])
+    }
+
+    this.updateSurface(false)
+    this.drawOverlay()
+  }
+
+  private pushRow(fn: (j: number) => number): void {
+    this.hist.copyWithin(COLS, 0, (ROWS - 1) * COLS)
+    let rowMax = 0
+    for (let j = 0; j < COLS; j++) {
+      const val = fn(j)
+      if (!Number.isFinite(val)) {
+        this.hist[j] = 0
+        continue
+      }
+      this.hist[j] = val
+      const a = Math.abs(val)
+      if (a > rowMax) rowMax = a
+    }
+    this.histMax = Math.max(this.histMax * 0.997, rowMax, 1e-6)
+  }
+
+  /** Write surface vertex positions/colours from the history buffer. */
+  private updateSurface(_force: boolean): void {
+    const pos = this.surfPos
+    const col = this.surfCol
+    const max = this.histMax
+    const invMax = 1 / max
+    const dz = WATER_D / (ROWS - 1)
+    for (let r = 0; r < ROWS; r++) {
+      const z = WATER_D / 2 - r * dz
+      const rowOff = r * COLS
+      for (let c = 0; c < COLS; c++) {
+        const i = rowOff + c
+        const s = Math.max(-1, Math.min(1, this.hist[i] * invMax))
+        const y = s * AMP_H
+        const x = (-SURF_W / 2 + (c / (COLS - 1)) * SURF_W)
+        pos[i * 3 + 0] = x
+        pos[i * 3 + 1] = y
+        pos[i * 3 + 2] = z
+        // colour: dark base → cyan (ψ>0) / pink (ψ<0)
+        const a = Math.pow(Math.abs(s), 0.6)
+        const tr = s >= 0 ? 0.13 : 0.96
+        const tg = s >= 0 ? 0.83 : 0.45
+        const tb = s >= 0 ? 0.93 : 0.71
+        col[i * 3 + 0] = 0.03 + tr * a
+        col[i * 3 + 1] = 0.05 + tg * a
+        col[i * 3 + 2] = 0.09 + tb * a
+      }
+    }
+    const mesh = this.surfMesh
+    if (!mesh) return
+    const pAttr = mesh.geometry.getAttribute('position')
+    const cAttr = mesh.geometry.getAttribute('color')
+    if (pAttr) {
+      if (pAttr.array instanceof Float32Array && pAttr.array.buffer === pos.buffer) {
+        pAttr.needsUpdate = true
+      } else {
+        mesh.geometry.setAttribute('position', { array: pos.slice(), itemSize: 3 })
+      }
+    }
+    if (cAttr) {
+      if (cAttr.array instanceof Float32Array && cAttr.array.buffer === col.buffer) {
+        cAttr.needsUpdate = true
+      } else {
+        mesh.geometry.setAttribute('color', { array: col.slice(), itemSize: 3 })
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 2D overlay: the physics figure                                      */
+
+  private drawOverlay(): void {
+    const cv = this.overlay
+    if (!cv || !this.grid) return
+    const w = cv.clientWidth || 0
+    const h = cv.clientHeight || 0
+    if (!w || !h) return
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr)
+      cv.height = Math.round(h * dpr)
+    }
+    const ctx = cv.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, w, h)
+
+    const g = this.grid
+    const mL = 46
+    const mR = 12
+    const mT = 38
+    const mB = 12
+    const mainH = h * 0.56
+    const probT = mT + mainH + 26
+    const probH = h - mB - probT
+    const pw = w - mL - mR
+
+    const xPx = (xv: number): number => mL + pw * (xv / g.boxHalf + 1) / 2
+
+    // energy window
+    let yMax = 0
+    if (this.system === 'ho') {
+      yMax = Math.max(1.1 * this.kappa * Math.min(6, 4), (this.eigenE[EIGEN_LEVELS - 1] || 1) * 1.3)
+    } else if (this.system === 'finite') {
+      yMax = Math.max(this.depth * 1.12, (this.eigenE[EIGEN_LEVELS - 1] || 0) * 1.2)
+    } else if (this.system === 'barrier') {
+      const eNow = this.obs ? this.obs.energy : this.packetE
+      yMax = Math.max(this.depth * 1.35, eNow * 1.7, 1)
+    } else {
+      yMax = Math.max((this.eigenE[EIGEN_LEVELS - 1] || 1) * 1.25, 1e-3)
+    }
+    yMax = Math.max(yMax, 1e-6)
+    const yPx = (ev: number): number => mT + mainH * (1 - Math.min(1.05, ev / yMax))
+
+    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.textBaseline = 'middle'
+
+    // header
+    const sysName =
+      this.system === 'well' ? 'Infinite well'
+      : this.system === 'finite' ? 'Finite well'
+      : this.system === 'ho' ? 'Harmonic oscillator'
+      : 'Rectangular barrier'
+    const scale = evScale(this.lengthNm)
+    ctx.fillStyle = '#e2e8f0'
+    ctx.textAlign = 'left'
+    ctx.fillText(`${sysName} — ${this.mode === 'eigen' ? `state n=${this.nState}` : 'wave packet'}`, mL, 12)
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#64748b'
+    ctx.fillText(`L = ${this.lengthNm.toFixed(2)} nm`, w - mR, 12)
+    ctx.fillText(`ħ²/2mₑL² = ${scale.toFixed(3)} eV · natural units ħ = 2m = 1`, w - mR, 26)
+    ctx.textAlign = 'left'
+
+    // baseline
+    ctx.strokeStyle = 'rgba(148,163,184,0.25)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(mL, yPx(0))
+    ctx.lineTo(mL + pw, yPx(0))
+    ctx.stroke()
+
+    // potential shading + curve
+    const drawPotential = () => {
+      ctx.beginPath()
+      for (let c = 0; c < COLS; c++) {
+        const xv = g.x[c * STRIDE]
+        const vv = g.v[c * STRIDE]
+        const px = xPx(xv)
+        const py = yPx(Math.min(vv, yMax * 1.05))
+        if (c === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      }
+      ctx.strokeStyle = '#94a3b8'
+      ctx.lineWidth = 1.6
+      ctx.stroke()
+      // fill under V for wells/barriers
+      if (this.system === 'barrier' || this.system === 'finite') {
+        ctx.lineTo(mL + pw, yPx(0))
+        ctx.lineTo(mL, yPx(0))
+        ctx.closePath()
+        ctx.fillStyle = 'rgba(148,163,184,0.10)'
+        ctx.fill()
+      }
+    }
+    drawPotential()
+
+    // energy levels (not for the pure-barrier system: no bound states)
+    if (this.system !== 'barrier') {
+      for (let k = 0; k < EIGEN_LEVELS; k++) {
+        const e = this.eigenE[k]
+        if (!Number.isFinite(e) || e > yMax) continue
+        const selected = k + 1 === this.nState && this.mode === 'eigen'
+        ctx.strokeStyle = selected ? 'rgba(34,211,238,0.9)' : 'rgba(34,211,238,0.28)'
+        ctx.setLineDash(selected ? [] : [4, 4])
+        ctx.lineWidth = selected ? 1.6 : 1
+        ctx.beginPath()
+        ctx.moveTo(mL, yPx(e))
+        ctx.lineTo(mL + pw, yPx(e))
+        ctx.stroke()
+        if (selected) {
+          ctx.fillStyle = '#22d3ee'
+          ctx.textAlign = 'left'
+          ctx.fillText(`E${this.nState} = ${e.toFixed(3)} (${(e * scale).toFixed(3)} eV)`, mL + 4, yPx(e) - 9)
+        }
+      }
+      ctx.setLineDash([])
+    } else if (this.obs) {
+      // packet energy marker (barrier system)
+      ctx.strokeStyle = 'rgba(251,191,36,0.75)'
+      ctx.setLineDash([3, 4])
+      ctx.beginPath()
+      const eNow = Math.min(this.obs.energy, yMax)
+      ctx.moveTo(mL, yPx(eNow))
+      ctx.lineTo(mL + pw, yPx(eNow))
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#fbbf24'
+      ctx.textAlign = 'left'
+      ctx.fillText(`⟨E⟩ = ${this.obs.energy.toFixed(3)}`, mL + 4, yPx(eNow) + 10)
+    }
+
+    // eigen ψₙ (scaled about its level) / packet Re ψ (scaled about ⟨E⟩)
+    const mode = this.mode === 'eigen' && this.psi && this.system !== 'barrier' ? 'eigen' : 'packet'
+    if (mode === 'eigen' && this.psi) {
+      let pk = 0
+      for (let j = 0; j < N_GRID; j++) if (Math.abs(this.psi[j]) > pk) pk = Math.abs(this.psi[j])
+      pk = Math.max(pk, 1e-12)
+      const anchor = this.eigenE[Math.min(EIGEN_LEVELS, this.nState) - 1] || 0
+      const amp = yMax * 0.26
+      ctx.beginPath()
+      for (let c = 0; c < COLS; c++) {
+        const j = c * STRIDE
+        const val = anchor + (this.psi[j] / pk) * amp
+        const px = xPx(g.x[j])
+        const py = yPx(val)
+        if (c === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      }
+      ctx.strokeStyle = '#67e8f9'
+      ctx.lineWidth = 1.8
+      ctx.stroke()
+      // zero nodes ticks
+      ctx.fillStyle = 'rgba(103,232,249,0.6)'
+      ctx.fillText(`${this.psiNodes} node${this.psiNodes === 1 ? '' : 's'}`, mL + 4, yPx(anchor) + 11)
+    } else if (this.packet) {
+      let pk = 0
+      const re = this.packet.re
+      for (let j = 0; j < N_GRID; j++) if (Math.abs(re[j]) > pk) pk = Math.abs(re[j])
+      pk = Math.max(pk, 1e-12)
+      const anchor = this.system === 'barrier' && this.obs ? Math.min(this.obs.energy, yMax * 0.62) : (this.obs ? Math.min(this.obs.energy, yMax * 0.62) : yMax * 0.45)
+      const amp = yMax * 0.3
+      ctx.beginPath()
+      for (let c = 0; c < COLS; c++) {
+        const j = c * STRIDE
+        const val = anchor + (re[j] / pk) * amp
+        const px = xPx(g.x[j])
+        const py = yPx(val)
+        if (c === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
+      }
+      ctx.strokeStyle = '#67e8f9'
+      ctx.lineWidth = 1.8
+      ctx.stroke()
+    }
+
+    // --- probability strip |ψ|² ---
+    const stripY = probT + probH
+    ctx.strokeStyle = 'rgba(148,163,184,0.25)'
+    ctx.beginPath()
+    ctx.moveTo(mL, probT)
+    ctx.lineTo(mL, stripY)
+    ctx.stroke()
+    ctx.fillStyle = '#64748b'
+    ctx.textAlign = 'right'
+    ctx.fillText('|ψ|²', mL - 6, probT + probH / 2)
+    ctx.textAlign = 'left'
+
+    const rho: number[] = new Array(COLS)
+    let rhoMax = 0
+    for (let c = 0; c < COLS; c++) {
+      const j = c * STRIDE
+      const val = mode === 'eigen' && this.psi ? this.psi[j] * this.psi[j] : this.packet ? this.packet.re[j] ** 2 + this.packet.im[j] ** 2 : 0
+      rho[c] = val
+      if (val > rhoMax) rhoMax = val
+    }
+    rhoMax = Math.max(rhoMax, 1e-24)
+    ctx.beginPath()
+    ctx.moveTo(xPx(g.x[0]), stripY)
+    for (let c = 0; c < COLS; c++) {
+      const px = xPx(g.x[c * STRIDE])
+      const py = stripY - (rho[c] / rhoMax) * (probH - 2)
+      ctx.lineTo(px, py)
+    }
+    ctx.lineTo(xPx(g.x[N_GRID - 1]), stripY)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(251,191,36,0.55)'
+    ctx.fill()
+    ctx.strokeStyle = '#fbbf24'
+    ctx.lineWidth = 1.2
+    ctx.stroke()
+
+    // --- stats block ---
+    const lines: string[] = []
+    if (mode === 'eigen' && this.psi && this.grid) {
+      const e = this.eigenE[Math.min(EIGEN_LEVELS, this.nState) - 1] || 0
+      const zero = new Float64Array(N_GRID)
+      const ob = observables(this.psi, zero, g.x, g.v, g.h)
+      lines.push(`ψ${this.nState}: E = ${e.toFixed(4)} nat = ${(e * scale).toFixed(3)} eV`)
+      lines.push(`nodes ${this.psiNodes}   ⟨x⟩ = ${ob.meanX.toFixed(2)}   Δx = ${ob.dx.toFixed(3)}`)
+      lines.push(`⟨p⟩ = ${ob.meanP.toFixed(4)}   Δp = ${ob.dp.toFixed(3)}`)
+      lines.push(`Δx·Δp/(ħ/2) = ${(ob.dxTimesDp / 0.5).toFixed(3)}  (Heisenberg ≥ 1)`)
+    } else if (this.packet && this.obs) {
+      const o = this.obs
+      lines.push(`t = ${this.simT.toFixed(1)}  ⟨E⟩ = ${o.energy.toFixed(3)} (${(o.energy * scale).toFixed(2)} eV)`)
+      const drift = Math.abs((o.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
+      lines.push(`ΔE drift ${(drift * 100).toFixed(3)}%   ⟨x⟩ = ${o.meanX.toFixed(2)}   Δx = ${o.dx.toFixed(2)}`)
+      lines.push(`⟨p⟩ = ${o.meanP.toFixed(3)}   Δp = ${o.dp.toFixed(3)}   ΔxΔp/(ħ/2) = ${(o.dxTimesDp / 0.5).toFixed(2)}`)
+      if (this.system === 'barrier') {
+        const T = barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth)
+        lines.push(`transmitted ${this.obsRight.toFixed(3)}   inside ${this.obsInside.toFixed(4)}   reflected ${this.obsLeft.toFixed(3)}`)
+        lines.push(`T(E₀) analytic = ${T.toFixed(4)}   (spread shifts the measured fraction)`)
+      }
+    }
+
+    ctx.fillStyle = '#94a3b8'
+    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
+    let ly = h - mB - lines.length * 15 - 6
+    for (const line of lines) {
+      ctx.fillText(line, mL, ly)
+      ly += 15
+    }
+
+    // x ticks
+    ctx.fillStyle = '#64748b'
+    ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace'
+    const tick = Math.max(1, Math.round(g.boxHalf / 2))
+    for (let xv = -Math.floor(g.boxHalf / tick) * tick; xv <= g.boxHalf; xv += tick) {
+      const px = xPx(xv)
+      ctx.fillText(String(Math.round(xv)), px - 6, yPx(0) + 10)
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  private teardown(): void {
+    cancelAnimationFrame(this.raf)
+    if (this.ro) {
+      this.ro.disconnect()
+      this.ro = null
+    }
+    if (this.controls) {
+      this.controls.dispose()
+      this.controls = null
+    }
+    if (this.renderer) {
+      if (this.group) {
+        this.group.traverse((obj) => {
+          const renderable = obj as Mesh & { geometry?: BufferGeometry }
+          if (renderable.geometry) this.renderer?.releaseGeometry(renderable.geometry)
+        })
+        this.scene?.remove(this.group)
+        this.group = null
+      }
+      this.surfMesh = null
+      this.ribbonMesh = null
+      this.renderer.dispose()
+      if (this.renderer.domElement.parentElement === this) {
+        this.removeChild(this.renderer.domElement)
+      }
+      this.renderer = null
+    }
+    if (this.overlay && this.overlay.parentElement === this) {
+      this.removeChild(this.overlay)
+      this.overlay = null
+    }
+    this.scene = null
+    this.camera = null
+  }
+}
+
+if (typeof customElements !== 'undefined' && !customElements.get('elementa-quantumwave')) {
+  customElements.define('elementa-quantumwave', ElementaQuantumWaveElement)
+}

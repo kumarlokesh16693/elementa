@@ -11,21 +11,49 @@ type ViewerKind = '2d' | 'qm' | 'spectra' | '3d' | 'crystal'
 
 class ElementaModelViewElement extends HTMLElement {
   private vnode: VNode | null = null
+  private stopEffect: (() => void) | null = null
+  private props: {
+    z: number
+    accent: string
+    model: ViewerKind
+    paused: boolean
+    speed: number
+  } | null = null
 
   static get observedAttributes(): string[] {
     return ['data-z', 'data-accent', 'data-model', 'data-paused', 'data-speed']
   }
 
   connectedCallback(): void {
-    this.renderView()
+    const props = reactive({
+      z: Number(this.getAttribute('data-z') ?? 0),
+      accent: this.getAttribute('data-accent') ?? '#fbbf24',
+      model: (this.getAttribute('data-model') ?? '2d') as ViewerKind,
+      paused: this.getAttribute('data-paused') === 'true',
+      speed: Number(this.getAttribute('data-speed') ?? 1),
+    })
+    this.props = props
+
+    const runner = effect(() => {
+      this.renderView()
+    })
+    this.stopEffect = () => runner.stop()
   }
 
   disconnectedCallback(): void {
+    this.stopEffect?.()
+    this.stopEffect = null
+    this.props = null
     this.teardown()
   }
 
   attributeChangedCallback(): void {
-    if (this.isConnected) this.renderView()
+    if (!this.isConnected || !this.props) return
+    this.props.z = Number(this.getAttribute('data-z') ?? 0)
+    this.props.accent = this.getAttribute('data-accent') ?? '#fbbf24'
+    this.props.model = (this.getAttribute('data-model') ?? '2d') as ViewerKind
+    this.props.paused = this.getAttribute('data-paused') === 'true'
+    this.props.speed = Number(this.getAttribute('data-speed') ?? 1)
   }
 
   private teardown(): void {
@@ -37,12 +65,13 @@ class ElementaModelViewElement extends HTMLElement {
   }
 
   private renderView(): void {
-    const element = getElement(Number(this.getAttribute('data-z')))
+    const z = this.props ? this.props.z : Number(this.getAttribute('data-z'))
+    const element = getElement(z)
     if (!element) return
-    const model = (this.getAttribute('data-model') ?? '2d') as ViewerKind
-    const accent = this.getAttribute('data-accent') ?? '#fbbf24'
-    const paused = this.getAttribute('data-paused') === 'true'
-    const speed = Number(this.getAttribute('data-speed') ?? 1)
+    const model = this.props ? this.props.model : ((this.getAttribute('data-model') ?? '2d') as ViewerKind)
+    const accent = this.props ? this.props.accent : (this.getAttribute('data-accent') ?? '#fbbf24')
+    const paused = this.props ? this.props.paused : (this.getAttribute('data-paused') === 'true')
+    const speed = this.props ? this.props.speed : Number(this.getAttribute('data-speed') ?? 1)
 
     let next: any = null
 

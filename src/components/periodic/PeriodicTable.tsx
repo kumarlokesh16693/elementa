@@ -5,6 +5,7 @@ import {
 } from '@/lib/periodic'
 import type { OriginKey } from '@/lib/periodic'
 import type { PaletteId } from '@/lib/palette'
+import { getPhaseAtTemperature, SIMULATED_PHASE_COLORS, type SimulatedPhase } from '@/lib/periodic/temperature'
 
 function H(tag: any, props?: any, ...children: any[]): VNode {
   return h(tag, props, ...children) as VNode
@@ -18,6 +19,8 @@ interface PeriodicTableProps {
   matches: Set<number> | null
   activeCategories: Set<CategoryKey> | null
   originFilter: OriginKey | null
+  simulatedTemp?: number | null
+  activePhaseFilter?: SimulatedPhase | null
 }
 
 function shortVal(v: number | null): string {
@@ -30,23 +33,59 @@ function shortVal(v: number | null): string {
   return v.toExponential(1)
 }
 
-function Tile({ el, colorMode, palette, dim, selected, onSelect }: {
-  el: ElementData; colorMode: ColorMode; palette: PaletteId; dim: boolean; selected: boolean; onSelect: (el: ElementData) => void
+function Tile({ el, colorMode, palette, dim, selected, simulatedTemp, onSelect }: {
+  el: ElementData
+  colorMode: ColorMode
+  palette: PaletteId
+  dim: boolean
+  selected: boolean
+  simulatedTemp?: number | null
+  onSelect: (el: ElementData) => void
 }): VNode {
-  const c = tileColor(el, colorMode, palette)
+  const currentTemp = simulatedTemp ?? 298.15
+  const phaseInfo = getPhaseAtTemperature(el, currentTemp)
+  let c = tileColor(el, colorMode, palette)
+
+  if (colorMode === 'phase') {
+    const pStyle = SIMULATED_PHASE_COLORS[phaseInfo.phase]
+    c = {
+      bg: pStyle.bg,
+      border: pStyle.border,
+      text: pStyle.text,
+    }
+  }
+
   const sub = isHeatMode(colorMode) ? shortVal(el[colorMode]) : String(el.mass)
   const origins = colorMode === 'origins' ? originsFor(el.number) : null
+  const tempLabel = currentTemp.toFixed(1) + ' K'
   const title = origins
-    ? `${el.name} · ${el.mass} u · origin: ${origins.map(([k, v]) => `~${v}% ${ORIGIN_MAP[k].label.toLowerCase()}`).join(' + ')}`
-    : `${el.name} · ${el.mass} u · ${el.config}`
+    ? `${el.name} · ${el.mass} u · ${phaseInfo.label} at ${tempLabel} · origin: ${origins.map(([k, v]) => `~${v}% ${ORIGIN_MAP[k].label.toLowerCase()}`).join(' + ')}`
+    : `${el.name} · ${el.mass} u · ${phaseInfo.label} at ${tempLabel}${phaseInfo.transitionInfo ? ` (${phaseInfo.transitionInfo})` : ''} · ${el.config}`
+
+  let shadow = selected ? `0 0 0 1.5px ${c.text}, 0 0 12px ${c.border}` : undefined
+  if (!selected && phaseInfo.isNearTransition) {
+    shadow = '0 0 0 1.5px #fbbf24, 0 0 10px rgba(251, 191, 36, 0.7)'
+  }
+
   return H('button', {
     type: 'button', onClick: () => onSelect(el), title,
-    'aria-label': `${el.name}, symbol ${el.symbol}, atomic number ${el.number}, ${el.mass} unified atomic mass units, ${el.category.replace('-', ' ')}, ${el.phase} at STP`,
-    style: { gridColumn: el.xpos + 1, gridRow: el.ypos + 1, background: c.bg, borderColor: selected ? c.text : c.border, color: c.text, boxShadow: selected ? `0 0 0 1.5px ${c.text}, 0 0 12px ${c.border}` : undefined },
-    class: `group relative grid h-full w-full grid-rows-[11px_1fr_13px] items-center rounded-[4px] border transition-[opacity,filter,transform] duration-150 hover:z-10 hover:scale-[1.12] hover:brightness-150 focus:outline-none ${dim ? 'opacity-15 saturate-0' : ''}`,
+    'aria-label': `${el.name}, symbol ${el.symbol}, atomic number ${el.number}, ${el.mass} unified atomic mass units, ${el.category.replace('-', ' ')}, ${phaseInfo.label} at ${tempLabel}`,
+    style: {
+      gridColumn: el.xpos + 1,
+      gridRow: el.ypos + 1,
+      background: c.bg,
+      borderColor: selected ? c.text : (phaseInfo.isNearTransition ? '#fbbf24' : c.border),
+      color: c.text,
+      boxShadow: shadow,
+    },
+    class: `group relative grid h-full w-full grid-rows-[11px_1fr_13px] items-center rounded-[4px] border transition-[opacity,filter,transform] duration-150 hover:z-10 hover:scale-[1.12] hover:brightness-150 focus:outline-none ${dim ? 'opacity-15 saturate-0' : ''} ${phaseInfo.isNearTransition ? 'animate-pulse' : ''}`,
   },
     H('span', { class: 'justify-self-start pl-1 font-mono text-[9px] leading-none opacity-90' }, el.number),
-    H('span', { class: 'absolute right-1 top-1 h-1 w-1 rounded-full bg-current opacity-60 group-hover:opacity-100', style: { display: el.radioactive ? 'block' : 'none' } }),
+    H('span', { class: 'absolute right-3.5 top-1.5 h-1 w-1 rounded-full bg-current opacity-60 group-hover:opacity-100', style: { display: el.radioactive ? 'block' : 'none' } }),
+    H('span', {
+      class: 'absolute right-1 top-0.5 text-[8.5px] leading-none opacity-70 group-hover:opacity-100 pointer-events-none select-none z-10',
+      title: `${phaseInfo.label} at ${tempLabel}`,
+    }, phaseInfo.icon),
     H('span', { class: 'self-center text-[17px] font-bold leading-none tracking-tight' }, el.symbol),
     H('span', { class: 'self-start font-mono text-[9px] leading-none opacity-85' }, origins ? `${ORIGIN_MAP[origins[0][0]].short} ${origins[0][1]}%` : sub),
   ) as VNode
@@ -69,7 +108,17 @@ function GhostSeries({ label, col, row, target, onSelect }: {
   ) as VNode
 }
 
-export default function PeriodicTable({ selected, onSelect, colorMode, palette = 'default', matches, activeCategories, originFilter }: PeriodicTableProps): VNode {
+export default function PeriodicTable({
+  selected,
+  onSelect,
+  colorMode,
+  palette = 'default',
+  matches,
+  activeCategories,
+  originFilter,
+  simulatedTemp = 298.15,
+  activePhaseFilter = null,
+}: PeriodicTableProps): VNode {
   const cells: Array<VNode | null> = [
     H('div', null),
     ...GROUP_LABELS.map((g) => H('div', { key: `g-${g}`, class: 'flex items-end justify-center pb-0.5 font-mono text-[8px] text-zinc-600' }, g)),
@@ -81,7 +130,17 @@ export default function PeriodicTable({ selected, onSelect, colorMode, palette =
       const dimSearch = matches != null && !matches.has(el.number)
       const dimCat = activeCategories != null && !activeCategories.has(el.category)
       const dimOrigin = originFilter != null && originPct(el.number, originFilter) < 5
-      return Tile({ el, colorMode, palette, dim: dimSearch || dimCat || dimOrigin, selected: selected === el.number, onSelect })
+      const phaseInfo = getPhaseAtTemperature(el, simulatedTemp ?? 298.15)
+      const dimPhase = activePhaseFilter != null && phaseInfo.phase !== activePhaseFilter
+      return Tile({
+        el,
+        colorMode,
+        palette,
+        dim: dimSearch || dimCat || dimOrigin || dimPhase,
+        selected: selected === el.number,
+        simulatedTemp,
+        onSelect,
+      })
     }),
   ]
   return H('div', { class: 'w-full max-w-full overflow-x-auto pb-2' }, H('div', { class: 'mx-auto w-max' }, H('div', {

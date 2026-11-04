@@ -38,6 +38,10 @@ Designed for researchers, educators, and university students, ELEMENTA covers at
 | **`/mo.html`** | **Molecular Orbital & Vibrational Lab** | LCAO-MO Theory, VSEPR Geometry, IR/Raman Spectra | `<elementa-vsepr-view>`, `<elementa-vibration-view>` |
 | **`/segre.html`** | **Segrè Chart of the Nuclides** | Nuclear Decay, Fission/Fusion, Radiation Shielding | `<elementa-segre-view>`, `<elementa-bateman-modal>`, `<elementa-semf-modal>`, `<elementa-nucleosynthesis-modal>`, `<elementa-shielding-modal>` |
 | **`/daedalus.html`** | **Project Daedalus Flight Simulator** | Hypersonic Re-entry, Aerothermodynamics | `<elementa-daedalus-sim>` |
+| **`/em.html`** | **Electromagnetism & Maxwell's Lab** | Electrostatics, Magnetostatics, EM Waves, Lorentz Force | `<elementa-em-field>` |
+| **`/thermo.html`** | **Thermodynamics & Heat Engines** | PV Diagrams, Carnot/Otto/Diesel/Stirling Cycles, Entropy, Kinetic Theory, Blackbody Radiation | `<elementa-thermo>` |
+| **`/relativity.html`** | **Special Relativity Lab** | Lorentz Boosts, Length Contraction, Time Dilation, Relativistic Doppler, Muon Decay, Twin Paradox | `<elementa-relativity>` |
+| **`/quantumwave.html`** | **1D Quantum Wave Lab** | Schrödinger Eigenstates, Heisenberg Uncertainty, Wave-Packet Tunnelling | `<elementa-quantumwave>` |
 | **`/references.html`** | **CODATA Reference & Citations** | Precision Metrology, SI Base Units, BibTeX | Native virtual DOM |
 | **`/integrity.html`** | **Cryptographic Data Audit** | NIST / IAEA Data Authenticity Verification | Native virtual DOM |
 

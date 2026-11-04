@@ -1,12 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "echo 'Prebuilt production bundle ready'",
+  "framework": "vite",
+  "buildCommand": "vite build",
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
     { "source": "/orbitals", "destination": "/orbitals.html" },
     { "source": "/mo", "destination": "/mo.html" },
+    { "source": "/em", "destination": "/em.html" },
+    { "source": "/thermo", "destination": "/thermo.html" },
+    { "source": "/relativity", "destination": "/relativity.html" },
     { "source": "/segre", "destination": "/segre.html" },
     { "source": "/daedalus", "destination": "/daedalus.html" },
     { "source": "/references", "destination": "/references.html" },

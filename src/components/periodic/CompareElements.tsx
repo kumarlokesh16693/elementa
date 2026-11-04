@@ -88,19 +88,20 @@ const SCATTER_W = 560
 const SCATTER_H = 220
 const SCATTER_PAD = 34
 
-export default function CompareElements({ elements, property, palette, onPropertyChange, onRemove, onClose }: {
+export default function CompareElements({ elements, property, palette, onPropertyChange, onAdd, onRemove, onClose }: {
   elements: ElementData[]
   property: MetricKey
   palette: PaletteId
   onPropertyChange: (property: MetricKey) => void
+  onAdd?: (atomicNumber: number) => void
   onRemove: (atomicNumber: number) => void
   onClose: () => void
 }): VNode {
   const metric = METRICS.find((item) => item.key === property) ?? METRICS[2]
   const values = elements.map((element) => valueOf(element, metric.key))
   const numeric = values.filter((value): value is number => value != null && Number.isFinite(value))
-  const min = numeric.length ? Math.min(...numeric) : 0
-  const max = numeric.length ? Math.max(...numeric) : 0
+  const min = numeric.length > 1 ? Math.min(...numeric) : (numeric.length === 1 ? Math.min(0, numeric[0]) : 0)
+  const max = numeric.length > 1 ? Math.max(...numeric) : (numeric.length === 1 ? Math.max(0, numeric[0]) * 1.2 || 1 : 0)
   const range = max - min || 1
   const zero = (0 - min) / range * 100
 
@@ -178,6 +179,35 @@ export default function CompareElements({ elements, property, palette, onPropert
     H('button', { type: 'button', onClick: onClose, class: 'flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-zinc-400 hover:text-zinc-100', 'aria-label': 'Close comparison' }, 'X'),
   )
 
+  const emptySlotsCount = Math.max(0, 4 - elements.length)
+  const emptySlotCards: VNode[] = Array.from({ length: emptySlotsCount }).map((_, i) => {
+    const slotNum = elements.length + i + 1
+    return H('div', {
+      key: 'empty-' + slotNum,
+      class: 'flex min-h-[110px] flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.015] p-3 text-center',
+    },
+      H('span', { class: 'text-[11px] font-medium text-zinc-400' }, '+ Slot ' + slotNum),
+      H('p', { class: 'mt-0.5 text-[9px] text-zinc-600' }, 'Add element to compare'),
+      onAdd ? H('select', {
+        class: 'mt-2 w-full max-w-[170px] rounded-md border border-white/10 bg-[#101722] px-2 py-1 text-[10px] text-zinc-200 focus:border-emerald-400/50 focus:outline-none',
+        value: '',
+        onChange: (event: Event) => {
+          const target = event.target as HTMLSelectElement
+          const val = Number(target.value)
+          if (val && onAdd) {
+            onAdd(val)
+            target.value = ''
+          }
+        },
+      },
+        H('option', { value: '' }, 'Select element…'),
+        ...ELEMENTS.filter((e) => !comparedZ.has(e.number)).map((e) =>
+          H('option', { key: e.number, value: String(e.number) }, e.number + '. ' + e.symbol + ' - ' + e.name),
+        ),
+      ) : null,
+    )
+  })
+
   const slotCards = H('div', { class: 'grid gap-2 sm:grid-cols-2 lg:grid-cols-4' },
     ...elements.map((element, index) => H('article', { key: element.number, class: 'relative rounded-xl border border-white/10 bg-white/[0.025] p-3' },
       H('button', { type: 'button', onClick: () => onRemove(element.number), class: 'absolute right-2 top-2 text-base leading-none text-zinc-600 hover:text-zinc-200', 'aria-label': 'Remove ' + element.name + ' from comparison' }, 'X'),
@@ -194,6 +224,7 @@ export default function CompareElements({ elements, property, palette, onPropert
       ),
       H('div', { class: 'mt-2 truncate font-mono text-[9px] text-zinc-500', title: element.config }, element.config),
     )),
+    ...emptySlotCards,
   )
 
   const rangeRows: VNode[] = elements.map((element, index) => {

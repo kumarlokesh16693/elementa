@@ -123,6 +123,7 @@ export function QMViewerNexus({ z, paused = false, speed = 1 }: QMViewerProps): 
             {
               type: 'button',
               onclick: () => pickSubshell(s.n, s.l),
+              onClick: () => pickSubshell(s.n, s.l),
               class: `rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none transition ${
                 active
                   ? 'border-amber-400/60 bg-amber-400/10 text-amber-300'
@@ -153,6 +154,9 @@ export function QMViewerNexus({ z, paused = false, speed = 1 }: QMViewerProps): 
               onclick: () => {
                 state.mode = 'surface'
               },
+              onClick: () => {
+                state.mode = 'surface'
+              },
               class: `px-2 py-0.5 text-[10px] lowercase transition ${
                 state.mode === 'surface' ? 'bg-white/10 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
               }`,
@@ -164,6 +168,9 @@ export function QMViewerNexus({ z, paused = false, speed = 1 }: QMViewerProps): 
             {
               type: 'button',
               onclick: () => {
+                state.mode = 'cloud'
+              },
+              onClick: () => {
                 state.mode = 'cloud'
               },
               class: `px-2 py-0.5 text-[10px] lowercase transition ${
@@ -178,6 +185,11 @@ export function QMViewerNexus({ z, paused = false, speed = 1 }: QMViewerProps): 
           {
             value: comboIdx,
             onchange: (e: Event) => {
+              const idx = parseInt((e.target as HTMLSelectElement).value, 10)
+              const c = combos[idx] ?? combos[0]
+              state.sel = { ...sel, m: c.m, sin: c.sin }
+            },
+            onChange: (e: Event) => {
               const idx = parseInt((e.target as HTMLSelectElement).value, 10)
               const c = combos[idx] ?? combos[0]
               state.sel = { ...sel, m: c.m, sin: c.sin }
@@ -205,6 +217,9 @@ export function QMViewerNexus({ z, paused = false, speed = 1 }: QMViewerProps): 
             step: '0.02',
             value: String(state.isoT),
             oninput: (e: Event) => {
+              state.isoT = parseFloat((e.target as HTMLInputElement).value)
+            },
+            onInput: (e: Event) => {
               state.isoT = parseFloat((e.target as HTMLInputElement).value)
             },
             class: 'w-16',
