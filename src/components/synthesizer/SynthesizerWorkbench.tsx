@@ -440,7 +440,7 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
             ),
 
             // --- 3D MOLECULAR STRUCTURE & PROPERTY VIEWER ---
-            H('div', { class: 'flex-1 rounded-xl border border-white/10 bg-[#0c1220] p-3 flex flex-col min-h-[280px]' },
+            H('div', { class: 'flex-1 rounded-xl border border-white/10 bg-[#0c1220] p-3.5 flex flex-col min-h-[380px]' },
               H('div', { class: 'flex flex-wrap items-center justify-between gap-1.5 border-b border-white/10 pb-1.5 mb-1.5' },
                 H('div', { class: 'flex items-center gap-2' },
                   H('span', { class: 'text-sm' }, '🔬'),
@@ -484,7 +484,7 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
               ),
 
               // The 3D Canvas Box
-              H('div', { class: 'relative flex-1 min-h-[160px] h-48 sm:h-56 rounded-lg border border-white/5 bg-black/40 overflow-hidden' },
+              H('div', { class: 'relative flex-1 min-h-[260px] h-72 sm:h-80 md:h-96 rounded-lg border border-white/5 bg-black/40 overflow-hidden' },
                 H('elementa-compound-3d', {
                   'data-compound': activeCompound.id,
                   'data-style': synthStore.viewStyle,

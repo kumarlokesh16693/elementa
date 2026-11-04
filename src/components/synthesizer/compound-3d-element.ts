@@ -253,15 +253,16 @@ export class ElementaCompound3DElement extends HTMLElement {
       })
     }
 
-    // Auto-fit camera distance based on bounding dimensions
+    // Auto-fit camera distance based on bounding dimensions (including atom radii)
     let maxDist = 1.0
     compound.atoms3D.forEach((atom) => {
       const d = Math.sqrt(atom.position[0] ** 2 + atom.position[1] ** 2 + atom.position[2] ** 2)
-      if (d > maxDist) maxDist = d
+      const r = (atom.radius ?? 0.35) * (style === 'space-filling' ? 1.6 : 0.85)
+      if (d + r > maxDist) maxDist = d + r
     })
-    const targetDist = Math.max(2.8, maxDist * 2.8)
+    const targetDist = Math.max(3.0, maxDist * 3.1)
     if (this.camera) {
-      this.camera.position.set(0, targetDist * 0.35, targetDist)
+      this.camera.position.set(0, targetDist * 0.25, targetDist)
       this.camera.lookAt(0, 0, 0)
       this.controls?.update()
     }
