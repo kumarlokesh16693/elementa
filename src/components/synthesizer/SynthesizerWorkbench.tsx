@@ -9,6 +9,7 @@ import {
 } from '@/lib/synthesizer/engine'
 import type { Compound, ChemicalReaction, ThermodynamicState, CompoundCategory } from '@/lib/synthesizer/types'
 import { getElement, ELEMENTS } from '@/lib/periodic'
+import { MolecularSvg } from './MolecularSvg'
 import './compound-3d-element'
 
 function H(tag: any, props?: any, ...children: any[]): VNode {
@@ -595,14 +596,11 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
                     H('span', { class: 'rounded bg-sky-400/20 px-1.5 py-0.5 font-mono text-[9px] text-sky-300 uppercase font-bold' }, comp.category),
                   ),
 
-                  H('div', { class: 'my-2 h-28 rounded-lg bg-black/40 border border-white/5 overflow-hidden' },
-                    H('elementa-compound-3d', {
-                      'data-compound': comp.id,
-                      'data-style': 'ball-stick',
-                      'data-rotate': 'true',
-                      'data-speed': '0.7',
-                      class: 'h-full w-full',
-                    }),
+                  H('div', { class: 'my-2 h-28 rounded-lg bg-black/40 border border-white/5 overflow-hidden flex items-center justify-center p-1 relative group' },
+                    MolecularSvg({ compound: comp, width: 280, height: 110 }),
+                    H('div', { class: 'absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px] pointer-events-none' },
+                      H('span', { class: 'rounded-full bg-sky-400 text-black font-bold text-[10px] px-2.5 py-1 shadow-md' }, 'Inspect in 3D Crucible →'),
+                    ),
                   ),
 
                   H('p', { class: 'text-[10.5px] text-zinc-400 line-clamp-2 leading-relaxed' }, comp.description),

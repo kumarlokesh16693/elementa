@@ -69,10 +69,16 @@ export class ElementaCompound3DElement extends HTMLElement {
     this.camera = new PerspectiveCamera(45, width / height, 0.1, 100)
     this.camera.position.set(0, 1.2, 3.8)
 
-    this.renderer = new WebGLRenderer({ antialias: true, alpha: true })
-    this.renderer.setSize(width, height)
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    this.appendChild(this.renderer.domElement)
+    try {
+      this.renderer = new WebGLRenderer({ antialias: true, alpha: true })
+      this.renderer.setSize(width, height)
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+      this.appendChild(this.renderer.domElement)
+    } catch (err) {
+      console.warn('[elementa-compound-3d] WebGL context unavailable or limit exceeded:', err)
+      this.renderer = null
+      return
+    }
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
