@@ -329,57 +329,57 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
           ),
 
           // === CENTER/RIGHT COLUMN: REACTION CRUCIBLE & 3D VISUALIZER (8 COLS) ===
-          H('div', { class: 'flex flex-col bg-[#05070d] p-3 overflow-y-auto lg:col-span-8 min-h-0 space-y-3' },
+          H('div', { class: 'flex flex-col bg-[#05070d] p-3 overflow-y-auto lg:col-span-8 min-h-0 space-y-2.5' },
             // --- REACTION CHAMBER CRUCIBLE ---
             H('div', {
-              class: `relative overflow-hidden rounded-2xl border ${reactionBorder} bg-gradient-to-b from-[#0e1728] to-[#070b14] p-4 transition-all duration-300 shadow-xl`,
-              style: { boxShadow: `0 0 40px ${reactionGlow}` },
+              class: `rounded-xl border ${reactionBorder} bg-gradient-to-b from-[#0e1728] to-[#070b14] p-3 transition-all duration-300 shadow-xl shrink-0`,
+              style: { boxShadow: `0 0 35px ${reactionGlow}` },
             },
               // Header of Crucible
-              H('div', { class: 'flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5' },
+              H('div', { class: 'flex flex-wrap items-center justify-between gap-1.5 border-b border-white/10 pb-2' },
                 H('div', null,
                   H('div', { class: 'flex items-center gap-2' },
-                    H('span', { class: 'text-xs uppercase tracking-wider font-bold text-amber-400 font-mono' }, 'Thermal Reaction Crucible'),
+                    H('span', { class: 'text-[11px] uppercase tracking-wider font-bold text-amber-400 font-mono' }, 'Thermal Reaction Crucible'),
                     H('span', {
-                      class: `rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                      class: `rounded-full px-2 py-0.5 text-[8.5px] font-bold uppercase tracking-wider ${
                         thermo.isSpontaneous ? 'bg-emerald-400/20 text-emerald-300' : 'bg-rose-400/20 text-rose-300'
                       }`,
-                    }, thermo.isSpontaneous ? '✓ Thermodynamically Spontaneous (ΔG < 0)' : '⚠ Non-Spontaneous (Requires Input)'),
+                    }, thermo.isSpontaneous ? '✓ Spontaneous (ΔG < 0)' : '⚠ Non-Spontaneous'),
                   ),
-                  H('h2', { class: 'text-[16px] font-bold text-zinc-100 mt-0.5' }, activeReaction.name),
+                  H('h2', { class: 'text-[15px] font-bold text-zinc-100 mt-0.5' }, activeReaction.name),
                 ),
 
                 // Reaction Type Badge
-                H('div', { class: 'rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-center font-mono' },
-                  H('span', { class: 'text-[9px] text-zinc-500 uppercase block' }, 'Reaction Type'),
-                  H('span', { class: 'text-[11px] font-bold text-zinc-200 uppercase' }, activeReaction.type),
+                H('div', { class: 'rounded border border-white/10 bg-white/[0.04] px-2 py-0.5 text-center font-mono' },
+                  H('span', { class: 'text-[8.5px] text-zinc-500 uppercase block' }, 'Reaction Type'),
+                  H('span', { class: 'text-[10.5px] font-bold text-zinc-200 uppercase' }, activeReaction.type),
                 ),
               ),
 
               // Chemical Equation Banner
-              H('div', { class: 'my-3 rounded-xl border border-white/10 bg-black/60 p-3 text-center shadow-inner' },
-                H('div', { class: 'font-mono text-[18px] sm:text-[22px] font-bold tracking-wider text-amber-200' }, activeReaction.equation),
+              H('div', { class: 'my-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 text-center shadow-inner' },
+                H('div', { class: 'font-mono text-[17px] sm:text-[20px] font-bold tracking-wider text-amber-200' }, activeReaction.equation),
                 activeReaction.conditions
-                  ? H('div', { class: 'mt-1 text-[10px] text-zinc-400 font-mono' }, `Conditions: ${activeReaction.conditions}${activeReaction.catalyst ? ` · Catalyst: ${activeReaction.catalyst}` : ''}`)
+                  ? H('div', { class: 'mt-0.5 text-[9.5px] text-zinc-400 font-mono' }, `Conditions: ${activeReaction.conditions}${activeReaction.catalyst ? ` · Catalyst: ${activeReaction.catalyst}` : ''}`)
                   : null,
               ),
 
               // Temperature Slider & State Controls
-              H('div', { class: 'rounded-xl border border-white/10 bg-[#090e1a] p-3' },
-                H('div', { class: 'flex items-center justify-between text-[11px] mb-1.5' },
-                  H('div', { class: 'flex items-center gap-2' },
-                    H('span', { class: 'font-semibold text-zinc-300' }, 'Reaction Temperature:'),
-                    H('span', { class: 'font-mono text-amber-300 font-bold text-[13px]' }, `${synthStore.tempK.toFixed(1)} K`),
-                    H('span', { class: 'font-mono text-zinc-500 text-[10px]' }, `(${(synthStore.tempK - 273.15).toFixed(1)} °C)`),
+              H('div', { class: 'rounded-lg border border-white/10 bg-[#090e1a] p-2.5' },
+                H('div', { class: 'flex flex-wrap items-center justify-between gap-1 text-[11px] mb-1.5' },
+                  H('div', { class: 'flex items-center gap-1.5' },
+                    H('span', { class: 'font-semibold text-zinc-300 text-[10.5px]' }, 'Reaction Temp:'),
+                    H('span', { class: 'font-mono text-amber-300 font-bold text-[12.5px]' }, `${synthStore.tempK.toFixed(1)} K`),
+                    H('span', { class: 'font-mono text-zinc-500 text-[9.5px]' }, `(${(synthStore.tempK - 273.15).toFixed(1)} °C)`),
                   ),
-                  H('div', { class: 'flex gap-1' },
+                  H('div', { class: 'flex flex-wrap gap-1' },
                     ...[200, 298.15, 600, 1100, 1800].map((tPreset) => H('button', {
                       key: `t-${tPreset}`,
                       type: 'button',
                       onClick: () => { synthStore.tempK = tPreset },
                       onclick: () => { synthStore.tempK = tPreset },
-                      class: `cursor-pointer rounded border px-1.5 py-0.5 font-mono text-[9px] transition ${
-                        Math.abs(synthStore.tempK - tPreset) < 1 ? 'border-amber-400 bg-amber-400/20 text-amber-200' : 'border-white/10 text-zinc-400 hover:text-zinc-200'
+                      class: `cursor-pointer rounded border px-1.5 py-0.5 font-mono text-[8.5px] transition ${
+                        Math.abs(synthStore.tempK - tPreset) < 1 ? 'border-amber-400 bg-amber-400/20 text-amber-200 font-bold' : 'border-white/10 text-zinc-400 hover:text-zinc-200'
                       }`,
                     }, `${tPreset.toFixed(0)} K`)),
                   ),
@@ -393,64 +393,64 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
                   value: String(synthStore.tempK),
                   onInput: (e: Event) => { synthStore.tempK = parseFloat((e.target as HTMLInputElement).value) },
                   oninput: (e: Event) => { synthStore.tempK = parseFloat((e.target as HTMLInputElement).value) },
-                  class: 'w-full accent-amber-400 cursor-pointer',
+                  class: 'w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-amber-400 my-1.5',
                   'aria-label': 'Adjust reaction temperature',
                 }),
 
                 // Thermodynamic Indicators Matrix
-                H('div', { class: 'mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 font-mono text-center' },
+                H('div', { class: 'mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4 font-mono text-center' },
                   // ΔH
-                  H('div', { class: 'rounded-lg border border-white/10 bg-white/[0.02] p-2' },
-                    H('div', { class: 'text-[9px] text-zinc-500 uppercase' }, 'Enthalpy (ΔH)'),
-                    H('div', { class: `text-[13px] font-bold ${thermo.deltaH < 0 ? 'text-amber-300' : 'text-sky-300'}` }, `${thermo.deltaH.toFixed(1)} kJ/mol`),
-                    H('div', { class: 'text-[8.5px] text-zinc-500 mt-0.5' }, thermo.deltaH < 0 ? '🔥 Exothermic' : '❄️ Endothermic'),
+                  H('div', { class: 'rounded border border-white/10 bg-white/[0.02] p-1.5' },
+                    H('div', { class: 'text-[8.5px] text-zinc-500 uppercase' }, 'Enthalpy (ΔH)'),
+                    H('div', { class: `text-[12px] font-bold ${thermo.deltaH < 0 ? 'text-amber-300' : 'text-sky-300'}` }, `${thermo.deltaH.toFixed(1)} kJ/mol`),
+                    H('div', { class: 'text-[8px] text-zinc-500 mt-0.5' }, thermo.deltaH < 0 ? '🔥 Exothermic' : '❄️ Endothermic'),
                   ),
 
                   // ΔS
-                  H('div', { class: 'rounded-lg border border-white/10 bg-white/[0.02] p-2' },
-                    H('div', { class: 'text-[9px] text-zinc-500 uppercase' }, 'Entropy (ΔS)'),
-                    H('div', { class: `text-[13px] font-bold ${thermo.deltaS > 0 ? 'text-emerald-300' : 'text-amber-300'}` }, `${thermo.deltaS.toFixed(1)} J/K`),
-                    H('div', { class: 'text-[8.5px] text-zinc-500 mt-0.5' }, thermo.deltaS > 0 ? 'Increasing disorder' : 'Order favored'),
+                  H('div', { class: 'rounded border border-white/10 bg-white/[0.02] p-1.5' },
+                    H('div', { class: 'text-[8.5px] text-zinc-500 uppercase' }, 'Entropy (ΔS)'),
+                    H('div', { class: `text-[12px] font-bold ${thermo.deltaS > 0 ? 'text-emerald-300' : 'text-amber-300'}` }, `${thermo.deltaS.toFixed(1)} J/K`),
+                    H('div', { class: 'text-[8px] text-zinc-500 mt-0.5' }, thermo.deltaS > 0 ? 'Disorder' : 'Order'),
                   ),
 
                   // ΔG
-                  H('div', { class: 'rounded-lg border border-white/10 bg-white/[0.02] p-2' },
-                    H('div', { class: 'text-[9px] text-zinc-500 uppercase' }, 'Gibbs Energy (ΔG)'),
-                    H('div', { class: `text-[13px] font-bold ${thermo.deltaG < 0 ? 'text-emerald-300' : 'text-rose-400'}` }, `${thermo.deltaG.toFixed(1)} kJ/mol`),
-                    H('div', { class: 'text-[8.5px] text-zinc-500 mt-0.5' }, thermo.deltaG < 0 ? 'Spontaneous' : 'Non-spontaneous'),
+                  H('div', { class: 'rounded border border-white/10 bg-white/[0.02] p-1.5' },
+                    H('div', { class: 'text-[8.5px] text-zinc-500 uppercase' }, 'Gibbs Energy (ΔG)'),
+                    H('div', { class: `text-[12px] font-bold ${thermo.deltaG < 0 ? 'text-emerald-300' : 'text-rose-400'}` }, `${thermo.deltaG.toFixed(1)} kJ/mol`),
+                    H('div', { class: 'text-[8px] text-zinc-500 mt-0.5' }, thermo.deltaG < 0 ? 'Spontaneous' : 'Non-spont.'),
                   ),
 
                   // K_eq
-                  H('div', { class: 'rounded-lg border border-white/10 bg-white/[0.02] p-2' },
-                    H('div', { class: 'text-[9px] text-zinc-500 uppercase' }, 'Equilibrium Keq'),
-                    H('div', { class: 'text-[13px] font-bold text-violet-300 truncate' },
+                  H('div', { class: 'rounded border border-white/10 bg-white/[0.02] p-1.5' },
+                    H('div', { class: 'text-[8.5px] text-zinc-500 uppercase' }, 'Equilibrium Keq'),
+                    H('div', { class: 'text-[12px] font-bold text-violet-300 truncate' },
                       thermo.kEq === Infinity ? '>> 10¹⁰' : thermo.kEq === 0 ? '<< 10⁻¹⁰' : thermo.kEq.toExponential(2)
                     ),
-                    H('div', { class: 'text-[8.5px] text-zinc-500 mt-0.5' }, thermo.kEq > 1 ? 'Product favored' : 'Reactant favored'),
+                    H('div', { class: 'text-[8px] text-zinc-500 mt-0.5' }, thermo.kEq > 1 ? 'Product fav.' : 'Reactant fav.'),
                   ),
                 ),
 
                 thermo.inversionTemp
-                  ? H('div', { class: 'mt-2 rounded bg-amber-400/10 px-2 py-1 text-[10px] font-mono text-amber-300 border border-amber-400/20 text-center' },
-                      `⚖️ Thermodynamic Inversion: At T = ${thermo.inversionTemp.toFixed(1)} K, ΔG changes sign! (Current: ${thermo.isSpontaneous ? 'Spontaneous' : 'Non-spontaneous'})`
+                  ? H('div', { class: 'mt-1.5 rounded bg-amber-400/10 px-2 py-0.5 text-[9.5px] font-mono text-amber-300 border border-amber-400/20 text-center' },
+                      `⚖️ Inversion: At T = ${thermo.inversionTemp.toFixed(1)} K, ΔG changes sign! (${thermo.isSpontaneous ? 'Spontaneous' : 'Non-spontaneous'})`
                     )
                   : null,
               ),
             ),
 
             // --- 3D MOLECULAR STRUCTURE & PROPERTY VIEWER ---
-            H('div', { class: 'flex-1 rounded-2xl border border-white/10 bg-[#0c1220] p-4 flex flex-col min-h-[380px]' },
-              H('div', { class: 'flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2 mb-2' },
+            H('div', { class: 'flex-1 rounded-xl border border-white/10 bg-[#0c1220] p-3 flex flex-col min-h-[280px]' },
+              H('div', { class: 'flex flex-wrap items-center justify-between gap-1.5 border-b border-white/10 pb-1.5 mb-1.5' },
                 H('div', { class: 'flex items-center gap-2' },
                   H('span', { class: 'text-sm' }, '🔬'),
-                  H('span', { class: 'font-mono text-[15px] font-bold text-zinc-100' }, activeCompound.formula),
-                  H('span', { class: 'text-[12px] text-zinc-300' }, `(${activeCompound.name})`),
-                  H('span', { class: 'rounded bg-sky-400/20 px-1.5 py-0.5 font-mono text-[9.5px] text-sky-300 uppercase' }, activeCompound.category),
+                  H('span', { class: 'font-mono text-[14px] font-bold text-zinc-100' }, activeCompound.formula),
+                  H('span', { class: 'text-[11.5px] text-zinc-300' }, `(${activeCompound.name})`),
+                  H('span', { class: 'rounded bg-sky-400/20 px-1.5 py-0.5 font-mono text-[9px] text-sky-300 uppercase' }, activeCompound.category),
                 ),
 
                 // 3D Controls
                 H('div', { class: 'flex items-center gap-1.5' },
-                  H('div', { class: 'flex rounded border border-white/10 overflow-hidden text-[10px]' },
+                  H('div', { class: 'flex rounded border border-white/10 overflow-hidden text-[9.5px]' },
                     H('button', {
                       type: 'button',
                       onClick: () => { synthStore.viewStyle = 'ball-stick' },
@@ -475,7 +475,7 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
                     type: 'button',
                     onClick: () => { synthStore.autoRotate = !synthStore.autoRotate },
                     onclick: () => { synthStore.autoRotate = !synthStore.autoRotate },
-                    class: `cursor-pointer rounded border px-2 py-0.5 text-[10px] font-mono transition ${
+                    class: `cursor-pointer rounded border px-2 py-0.5 text-[9.5px] font-mono transition ${
                       synthStore.autoRotate ? 'border-amber-400/40 bg-amber-400/10 text-amber-300' : 'border-white/10 text-zinc-400'
                     }`,
                   }, synthStore.autoRotate ? 'Spin: ON' : 'Spin: OFF'),
@@ -483,7 +483,7 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
               ),
 
               // The 3D Canvas Box
-              H('div', { class: 'relative flex-1 min-h-[240px] rounded-xl border border-white/5 bg-black/40 overflow-hidden' },
+              H('div', { class: 'relative flex-1 min-h-[160px] h-48 sm:h-56 rounded-lg border border-white/5 bg-black/40 overflow-hidden' },
                 H('elementa-compound-3d', {
                   'data-compound': activeCompound.id,
                   'data-style': synthStore.viewStyle,
@@ -491,40 +491,40 @@ export function SynthesizerWorkbench({ initialZ }: { initialZ?: number | null } 
                   'data-speed': '1',
                   class: 'h-full w-full',
                 }),
-                H('div', { class: 'pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 font-mono text-[9px] text-zinc-500 bg-black/60 px-2 py-1 rounded backdrop-blur' },
-                  'Drag to rotate · Scroll to zoom · CPK elemental coloration',
+                H('div', { class: 'pointer-events-none absolute bottom-1.5 left-1.5 flex items-center gap-1.5 font-mono text-[8.5px] text-zinc-500 bg-black/60 px-1.5 py-0.5 rounded backdrop-blur' },
+                  'Drag to rotate · Scroll to zoom · CPK coloration',
                 ),
               ),
 
               // Compound Physical Metrics Bar
-              H('div', { class: 'mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 font-mono text-[10px]' },
-                H('div', { class: 'rounded-md border border-white/5 bg-white/[0.02] p-2' },
-                  H('div', { class: 'text-zinc-500 uppercase text-[8.5px]' }, 'Molar Mass'),
-                  H('div', { class: 'font-bold text-zinc-200 text-[11px]' }, `${activeCompound.molecularWeight.toFixed(3)} g/mol`),
+              H('div', { class: 'mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4 font-mono text-[9.5px]' },
+                H('div', { class: 'rounded border border-white/5 bg-white/[0.02] p-1.5' },
+                  H('div', { class: 'text-zinc-500 uppercase text-[8px]' }, 'Molar Mass'),
+                  H('div', { class: 'font-bold text-zinc-200 text-[10.5px]' }, `${activeCompound.molecularWeight.toFixed(3)} g/mol`),
                 ),
-                H('div', { class: 'rounded-md border border-white/5 bg-white/[0.02] p-2' },
-                  H('div', { class: 'text-zinc-500 uppercase text-[8.5px]' }, 'Bond Character'),
-                  H('div', { class: 'font-bold text-zinc-200 text-[11px]' }, `${activeCompound.ionicPct}% Ionic (Δχ ${activeCompound.electronegativityDiff})`),
+                H('div', { class: 'rounded border border-white/5 bg-white/[0.02] p-1.5' },
+                  H('div', { class: 'text-zinc-500 uppercase text-[8px]' }, 'Bond Character'),
+                  H('div', { class: 'font-bold text-zinc-200 text-[10.5px]' }, `${activeCompound.ionicPct}% Ionic (Δχ ${activeCompound.electronegativityDiff})`),
                 ),
-                H('div', { class: 'rounded-md border border-white/5 bg-white/[0.02] p-2' },
-                  H('div', { class: 'text-zinc-500 uppercase text-[8.5px]' }, 'Phase at STP'),
-                  H('div', { class: 'font-bold text-zinc-200 text-[11px] capitalize' }, `${activeCompound.stateAtSTP} (${activeCompound.bonding})`),
+                H('div', { class: 'rounded border border-white/5 bg-white/[0.02] p-1.5' },
+                  H('div', { class: 'text-zinc-500 uppercase text-[8px]' }, 'Phase at STP'),
+                  H('div', { class: 'font-bold text-zinc-200 text-[10.5px] capitalize' }, `${activeCompound.stateAtSTP} (${activeCompound.bonding})`),
                 ),
-                H('div', { class: 'rounded-md border border-white/5 bg-white/[0.02] p-2' },
-                  H('div', { class: 'text-zinc-500 uppercase text-[8.5px]' }, 'Formation Enthalpy'),
-                  H('div', { class: 'font-bold text-zinc-200 text-[11px]' }, `${activeCompound.deltaHf.toFixed(1)} kJ/mol`),
+                H('div', { class: 'rounded border border-white/5 bg-white/[0.02] p-1.5' },
+                  H('div', { class: 'text-zinc-500 uppercase text-[8px]' }, 'Formation Enthalpy'),
+                  H('div', { class: 'font-bold text-zinc-200 text-[10.5px]' }, `${activeCompound.deltaHf.toFixed(1)} kJ/mol`),
                 ),
               ),
 
               // Description & Real-world Applications
-              H('div', { class: 'mt-2 text-[11px] text-zinc-400 border-t border-white/5 pt-2' },
-                H('p', { class: 'leading-relaxed' }, activeCompound.description),
+              H('div', { class: 'mt-1.5 text-[10.5px] text-zinc-400 border-t border-white/5 pt-1.5' },
+                H('p', { class: 'leading-relaxed line-clamp-2' }, activeCompound.description),
                 activeCompound.applications && activeCompound.applications.length > 0
-                  ? H('div', { class: 'mt-1 flex flex-wrap items-center gap-1.5' },
-                      H('span', { class: 'font-mono text-[9px] text-zinc-500 uppercase' }, 'Applications:'),
-                      ...activeCompound.applications.map((app) => H('span', {
+                  ? H('div', { class: 'mt-1 flex flex-wrap items-center gap-1' },
+                      H('span', { class: 'font-mono text-[8.5px] text-zinc-500 uppercase' }, 'Apps:'),
+                      ...activeCompound.applications.slice(0, 3).map((app) => H('span', {
                         key: app,
-                        class: 'rounded bg-sky-400/10 px-1.5 py-0.5 text-[9.5px] text-sky-300 font-mono',
+                        class: 'rounded bg-sky-400/10 px-1.5 py-0.5 text-[8.5px] text-sky-300 font-mono',
                       }, app)),
                     )
                   : null,
