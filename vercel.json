@@ -14,6 +14,7 @@
     { "source": "/segre", "destination": "/segre.html" },
     { "source": "/daedalus", "destination": "/daedalus.html" },
     { "source": "/references", "destination": "/references.html" },
+    { "source": "/synthesizer", "destination": "/synthesizer.html" },
     { "source": "/integrity", "destination": "/integrity.html" }
   ],
   "headers": [

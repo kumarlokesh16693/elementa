@@ -327,6 +327,7 @@ export default function DetailPanel({ element: el, accent, open, compareSelected
         H('p', { class: 'text-[10px] leading-relaxed text-zinc-500' }, 'Current model tier: ' + modelTierMeta.label + ' ' + modelTier.note),
         uncertaintyNote('mass') ? H('p', { class: 'text-[9.5px] leading-relaxed text-zinc-600' }, uncertaintyNote('mass')!) : null,
         H('div', { class: 'flex flex-wrap gap-1.5' },
+          H('a', { href: './synthesizer.html?z=' + el.number, class: 'rounded-md border border-rose-400/40 bg-rose-400/10 px-2 py-1 text-[10px] text-rose-300 transition hover:bg-rose-400/20' }, '⚗️ Synthesize compounds →'),
           H('button', { type: 'button', onClick: () => window.dispatchEvent(new Event('elementa-open-research')), class: 'rounded-md border border-sky-400/40 bg-sky-400/10 px-2 py-1 text-[10px] text-sky-300 transition hover:bg-sky-400/20' }, 'Cite / export this view'),
           H('a', { href: './references.html', class: 'rounded-md border border-white/10 px-2 py-1 text-zinc-300 transition hover:bg-white/5' }, 'References'),
           H('a', { href: './integrity.html', class: 'rounded-md border border-white/10 px-2 py-1 text-zinc-300 transition hover:bg-white/5' }, 'Integrity report'),

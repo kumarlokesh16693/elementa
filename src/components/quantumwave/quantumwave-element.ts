@@ -166,7 +166,10 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     overlay.style.top = '10px'
     overlay.style.left = '10px'
     overlay.style.bottom = '10px'
-    overlay.style.width = '55%'
+    // The WebGL surface can be subtle or temporarily flat (for example before
+    // a packet has advanced). Keep the physics plot spanning the whole panel
+    // so that state never reads as an empty right-hand gutter.
+    overlay.style.width = 'calc(100% - 20px)'
     overlay.style.height = 'calc(100% - 20px)'
     overlay.style.pointerEvents = 'none'
     overlay.style.borderRadius = '12px'

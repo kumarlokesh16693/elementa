@@ -112,6 +112,7 @@ export default defineConfig({
         thermo: path.resolve(__dirname, 'thermo.html'),
         relativity: path.resolve(__dirname, 'relativity.html'),
         quantumwave: path.resolve(__dirname, 'quantumwave.html'),
+        synthesizer: path.resolve(__dirname, 'synthesizer.html'),
         integrity: path.resolve(__dirname, 'integrity.html'),
       },
     },

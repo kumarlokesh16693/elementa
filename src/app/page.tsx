@@ -459,6 +459,7 @@ function HomePage(): VNode {
         title: 'Open element comparison lab',
       }, `Compare ${state.compared.length}/4`),
       actionButton('MO builder', './mo.html', 'border-amber-400/40 bg-amber-400/10 text-amber-300'),
+      actionButton('Synthesizer', './synthesizer.html', 'border-rose-400/40 bg-rose-400/10 text-rose-300'),
       actionButton('Orbital lab', './orbitals.html', 'border-sky-400/40 bg-sky-400/10 text-sky-300'),
       actionButton('EM lab', './em.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
       actionButton('Thermo lab', './thermo.html', 'border-fbbf24/40 bg-fbbf24/10 text-fbbf24'),

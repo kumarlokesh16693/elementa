@@ -1,0 +1,267 @@
+/**
+ * Custom Element: <elementa-compound-3d>
+ *
+ * Real-time WebGL 3D molecular and crystal structure visualizer using @nexus/3d.
+ * Renders ball-and-stick, space-filling, and wireframe representations with CPK coloration.
+ */
+
+import {
+  AmbientLight,
+  Color,
+  CylinderGeometry,
+  DirectionalLight,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  OrbitControls,
+  PerspectiveCamera,
+  Quaternion,
+  Scene,
+  SphereGeometry,
+  Vector3,
+  WebGLRenderer,
+} from '@nexus/3d'
+import { getCompoundById } from '@/lib/synthesizer/engine'
+import type { Compound } from '@/lib/synthesizer/types'
+
+export class ElementaCompound3DElement extends HTMLElement {
+  private renderer: WebGLRenderer | null = null
+  private scene: Scene | null = null
+  private camera: PerspectiveCamera | null = null
+  private controls: OrbitControls | null = null
+  private modelGroup: Object3D | null = null
+  private animId: number | null = null
+  private resizeObserver: ResizeObserver | null = null
+
+  static get observedAttributes(): string[] {
+    return ['data-compound', 'data-style', 'data-rotate', 'data-speed']
+  }
+
+  connectedCallback(): void {
+    this.setupScene()
+    this.renderCompound()
+  }
+
+  disconnectedCallback(): void {
+    this.teardown()
+  }
+
+  attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
+    if (oldVal === newVal) return
+    if (this.isConnected && this.renderer) {
+      this.renderCompound()
+    }
+  }
+
+  private setupScene(): void {
+    if (this.renderer) return
+
+    this.style.display = 'block'
+    this.style.width = '100%'
+    this.style.height = '100%'
+    this.style.position = 'relative'
+    this.style.overflow = 'hidden'
+
+    const width = this.clientWidth || 400
+    const height = this.clientHeight || 400
+
+    this.scene = new Scene()
+    this.camera = new PerspectiveCamera(45, width / height, 0.1, 100)
+    this.camera.position.set(0, 1.2, 3.8)
+
+    this.renderer = new WebGLRenderer({ antialias: true, alpha: true })
+    this.renderer.setSize(width, height)
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    this.appendChild(this.renderer.domElement)
+
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
+    this.controls.enableDamping = true
+    this.controls.dampingFactor = 0.08
+    this.controls.rotateSpeed = 0.8
+    this.controls.zoomSpeed = 1.0
+
+    // Lighting setup
+    const amb = new AmbientLight(0xffffff, 0.65)
+    this.scene.add(amb)
+
+    const keyLight = new DirectionalLight(0xffffff, 0.95)
+    keyLight.position.set(5, 8, 6)
+    this.scene.add(keyLight)
+
+    const fillLight = new DirectionalLight(0x38bdf8, 0.4)
+    fillLight.position.set(-5, -4, -4)
+    this.scene.add(fillLight)
+
+    const rimLight = new DirectionalLight(0xfbbf24, 0.3)
+    rimLight.position.set(0, -6, 4)
+    this.scene.add(rimLight)
+
+    this.modelGroup = new Object3D()
+    this.scene.add(this.modelGroup)
+
+    this.resizeObserver = new ResizeObserver(() => this.handleResize())
+    this.resizeObserver.observe(this)
+
+    this.startAnimationLoop()
+  }
+
+  private teardown(): void {
+    if (this.animId !== null) {
+      cancelAnimationFrame(this.animId)
+      this.animId = null
+    }
+    this.resizeObserver?.disconnect()
+    this.resizeObserver = null
+
+    if (this.controls) {
+      this.controls.dispose()
+      this.controls = null
+    }
+
+    if (this.renderer) {
+      this.renderer.dispose()
+      if (this.renderer.domElement.parentNode === this) {
+        this.removeChild(this.renderer.domElement)
+      }
+      this.renderer = null
+    }
+
+    this.scene = null
+    this.camera = null
+    this.modelGroup = null
+  }
+
+  private handleResize(): void {
+    if (!this.renderer || !this.camera) return
+    const width = this.clientWidth
+    const height = this.clientHeight
+    if (width === 0 || height === 0) return
+
+    this.camera.aspect = width / height
+    this.camera.updateProjectionMatrix()
+    this.renderer.setSize(width, height)
+  }
+
+  private startAnimationLoop(): void {
+    const loop = () => {
+      this.animId = requestAnimationFrame(loop)
+
+      const autoRotate = this.getAttribute('data-rotate') !== 'false'
+      const speed = Number(this.getAttribute('data-speed') ?? '1')
+
+      if (autoRotate && this.modelGroup) {
+        this.modelGroup.rotation.y += 0.008 * speed
+      }
+
+      this.controls?.update()
+      if (this.renderer && this.scene && this.camera) {
+        this.renderer.render(this.scene, this.camera)
+      }
+    }
+    loop()
+  }
+
+  private renderCompound(): void {
+    if (!this.modelGroup) return
+
+    // Clear previous geometry
+    while (this.modelGroup.children.length > 0) {
+      const child = this.modelGroup.children[0]
+      this.modelGroup.remove(child)
+    }
+
+    const compoundId = this.getAttribute('data-compound') ?? 'H2O'
+    const style = (this.getAttribute('data-style') ?? 'ball-stick') as 'ball-stick' | 'space-filling' | 'wireframe'
+    const compound: Compound | undefined = getCompoundById(compoundId)
+
+    if (!compound || compound.atoms3D.length === 0) return
+
+    const upAxis = new Vector3(0, 1, 0)
+    const atomRadiusMult = style === 'space-filling' ? 1.6 : style === 'wireframe' ? 0.35 : 0.85
+    const bondRadius = style === 'wireframe' ? 0.025 : 0.075
+
+    // 1. Render Atoms
+    compound.atoms3D.forEach((atom) => {
+      const baseR = atom.radius ?? 0.35
+      const finalR = baseR * atomRadiusMult
+      const col = atom.color ?? '#94a3b8'
+
+      const mat = new MeshStandardMaterial({
+        color: new Color(col),
+        roughness: 0.22,
+        metalness: 0.18,
+      })
+
+      const geo = new SphereGeometry(finalR, 28, 28)
+      const mesh = new Mesh(geo, mat)
+      mesh.position.set(atom.position[0], atom.position[1], atom.position[2])
+      this.modelGroup!.add(mesh)
+    })
+
+    // 2. Render Bonds
+    if (style !== 'space-filling') {
+      const bondMat = new MeshStandardMaterial({
+        color: new Color('#71717a'),
+        roughness: 0.35,
+        metalness: 0.15,
+      })
+
+      compound.bonds3D.forEach((bond) => {
+        const atomA = compound.atoms3D[bond.from]
+        const atomB = compound.atoms3D[bond.to]
+        if (!atomA || !atomB) return
+
+        const pA = new Vector3(...atomA.position)
+        const pB = new Vector3(...atomB.position)
+        const diff = new Vector3().subVectors(pB, pA)
+        const len = diff.length()
+        if (len < 1e-4) return
+
+        const dir = diff.clone().normalize()
+        const mid = new Vector3().addVectors(pA, pB).multiplyScalar(0.5)
+
+        const order = bond.order ?? 1
+
+        if (order === 1) {
+          const geo = new CylinderGeometry(bondRadius, bondRadius, len, 16)
+          const mesh = new Mesh(geo, bondMat)
+          mesh.position.copy(mid)
+          mesh.quaternion.copy(new Quaternion().setFromUnitVectors(upAxis, dir))
+          this.modelGroup!.add(mesh)
+        } else {
+          // Double or triple bond offset
+          const perp = new Vector3(0, 1, 0).cross(dir).normalize()
+          if (perp.length() < 0.1) perp.set(1, 0, 0).cross(dir).normalize()
+          const offsets = order === 2 ? [-0.07, 0.07] : [-0.09, 0, 0.09]
+          const thinRadius = bondRadius * 0.75
+
+          offsets.forEach((off) => {
+            const geo = new CylinderGeometry(thinRadius, thinRadius, len, 12)
+            const mesh = new Mesh(geo, bondMat)
+            const bMid = mid.clone().addScaledVector(perp, off)
+            mesh.position.copy(bMid)
+            mesh.quaternion.copy(new Quaternion().setFromUnitVectors(upAxis, dir))
+            this.modelGroup!.add(mesh)
+          })
+        }
+      })
+    }
+
+    // Auto-fit camera distance based on bounding dimensions
+    let maxDist = 1.0
+    compound.atoms3D.forEach((atom) => {
+      const d = Math.sqrt(atom.position[0] ** 2 + atom.position[1] ** 2 + atom.position[2] ** 2)
+      if (d > maxDist) maxDist = d
+    })
+    const targetDist = Math.max(2.8, maxDist * 2.8)
+    if (this.camera) {
+      this.camera.position.set(0, targetDist * 0.35, targetDist)
+      this.camera.lookAt(0, 0, 0)
+      this.controls?.update()
+    }
+  }
+}
+
+if (!customElements.get('elementa-compound-3d')) {
+  customElements.define('elementa-compound-3d', ElementaCompound3DElement)
+}

@@ -18,6 +18,7 @@
 | **`/thermo.html`** | Thermodynamics & Heat Engines Lab | PV Diagrams, Heat-Engine Cycles, Entropy, Kinetic Theory, Blackbody Radiation | `<elementa-thermo>` |
 | **`/relativity.html`** | Special Relativity Lab | Lorentz Boosts, Length Contraction, Time Dilation, Relativistic Doppler, Muon Decay | `<elementa-relativity>` |
 | **`/quantumwave.html`** | 1D Quantum Wave Laboratory | Schrödinger Eigenstates, Heisenberg Uncertainty, Crank–Nicolson Wave Packets, Tunnelling | `<elementa-quantumwave>` |
+| **`/synthesizer.html`** | Compound & Reaction Synthesizer Lab | Thermochemistry, Stoichiometry, Gibbs Free Energy & Equilibrium, 3D Molecular Structures | `<elementa-compound-3d>` |
 | **`/references.html`** | Scientific References & CODATA Constants | Physical Constants, Precision Metrology, SI Base Units | Pure `nexus-framework` virtual DOM |
 | **`/integrity.html`** | Cryptographic Data Audit & Provenance | Data Authenticity (NIST, IAEA, CODATA, IUPAC) | Pure `nexus-framework` virtual DOM |
 
@@ -313,7 +314,31 @@
 
 ---
 
-## 🛡️ 10. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## ⚗️ 10. Compound & Chemical Reaction Synthesizer (`/synthesizer.html`)
+
+- **Interactive Element Combiner Workbench**:
+  - Multi-element selection (up to 5 elements simultaneously) to discover and synthesize matching binary and ternary compounds.
+  - Curated database spanning oxides, halides, hydrides, mineral acids, caustic bases, salts, hydrocarbons, and wide-bandgap semiconductors.
+  - Preset library: Water & Peroxides, Haber-Bosch Ammonia, Goldschmidt Thermite, Rock Salt Halite, Hematite Rusting, 5G Gallium Arsenide, EV Traction Silicon Carbide, Lithium-Ion Cathode materials, Limestone Calcination, Methane Flame.
+- **Reaction Thermochemistry & Le Chatelier Crucible**:
+  - Live temperature simulation range ($100\,\text{K} \to 2500\,\text{K}$).
+  - Temperature-dependent thermodynamic calculations:
+    $$\Delta H_{rxn}(T) \approx \sum \nu_p \Delta H_f^\circ(\text{products}) - \sum \nu_r \Delta H_f^\circ(\text{reactants})$$
+    $$\Delta S_{rxn}(T) \approx \sum \nu_p S^\circ(\text{products}) - \sum \nu_r S^\circ(\text{reactants})$$
+    $$\Delta G_{rxn}(T) = \Delta H_{rxn} - T \Delta S_{rxn}$$
+    $$K_{eq}(T) = \exp\left(-\frac{\Delta G_{rxn}}{R \cdot T}\right)$$
+  - Thermal rating indicators (Extremely Exothermic, Exothermic, Endothermic) with reactive visual glow and flame/spark styling.
+  - Thermodynamic inversion temperature calculation ($T_{\text{inv}} = \Delta H / \Delta S$) identifying exact temperatures where spontaneity reverses.
+- **3D Molecular & Crystal Structure Visualizer (`<elementa-compound-3d>`)**:
+  - Native WebGL hardware-accelerated 3D rendering with CPK elemental coloration.
+  - Multi-order chemical bond rendering (single, double, triple bonds via parallel cylinders).
+  - Model rendering modes: Ball-and-Stick, Space-Filling (van der Waals radii), and Wireframe.
+  - Full OrbitControls with smooth damping, zoom, and auto-rotation toggle.
+  - Bond character metrics: Pauling percent ionic character ($1 - e^{-0.25(\Delta\chi)^2}$) and electronegativity difference $\Delta\chi$.
+
+---
+
+## 🛡️ 11. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).
