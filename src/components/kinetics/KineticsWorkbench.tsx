@@ -17,42 +17,52 @@ function H(tag: any, props?: any, ...children: any[]): VNode {
   return h(tag, props, ...children) as VNode
 }
 
-export function KineticsWorkbench(): VNode {
-  const store = reactive<KineticsState>({
-    activeReactionId: KINETICS_REACTIONS[0].id,
-    temperatureK: KINETICS_REACTIONS[0].defaultTempK,
-    catalystEnabled: true,
-    catalystEfficiency: 1.0,
-    order: KINETICS_REACTIONS[0].order,
-    initialConcA: 1.0,
-    initialConcB: 0.0,
-    rateConstantK: 0.25,
-    simTime: 0,
-    simPlaying: true,
-    simSpeed: 1.0,
-    activeTab: 'energy-profile',
-    enzymeParams: {
-      vMax: 50,
-      kM: 20,
-      inhibitorType: 'none',
-      inhibitorConcI: 10,
-      kI: 10,
-    },
-  })
+// Module-level reactive store ensures state survives re-renders
+export const kineticsStore = reactive<KineticsState>({
+  activeReactionId: KINETICS_REACTIONS[0].id,
+  temperatureK: KINETICS_REACTIONS[0].defaultTempK,
+  catalystEnabled: true,
+  catalystEfficiency: 1.0,
+  order: KINETICS_REACTIONS[0].order,
+  initialConcA: 1.0,
+  initialConcB: 0.0,
+  rateConstantK: 0.25,
+  simTime: 0,
+  simPlaying: true,
+  simSpeed: 1.0,
+  activeTab: 'energy-profile',
+  enzymeParams: {
+    vMax: 50,
+    kM: 20,
+    inhibitorType: 'none',
+    inhibitorConcI: 10,
+    kI: 10,
+  },
+})
 
-  // Timer loop for simulation
-  let lastTimestamp = performance.now()
+// Single global animation timer loop for kinetics rate curves
+let kineticsAnimationStarted = false
+let lastTimestamp = performance.now()
+function initKineticsAnimation() {
+  if (kineticsAnimationStarted) return
+  kineticsAnimationStarted = true
+
   function tick(now: number) {
     const dt = (now - lastTimestamp) / 1000
     lastTimestamp = now
 
-    if (store.simPlaying && store.activeTab === 'rate-curves') {
-      store.simTime += dt * store.simSpeed
-      if (store.simTime > 30) store.simTime = 0
+    if (kineticsStore.simPlaying && kineticsStore.activeTab === 'rate-curves') {
+      kineticsStore.simTime += dt * kineticsStore.simSpeed
+      if (kineticsStore.simTime > 30) kineticsStore.simTime = 0
     }
     requestAnimationFrame(tick)
   }
   requestAnimationFrame(tick)
+}
+
+export function KineticsWorkbench(): VNode {
+  const store = kineticsStore
+  initKineticsAnimation()
 
   return H('div', { class: 'flex h-full flex-col overflow-hidden bg-[#070a12]' },
     // Top Control Toolbar
@@ -63,6 +73,13 @@ export function KineticsWorkbench(): VNode {
         H('select', {
           value: store.activeReactionId,
           onChange: (e: any) => {
+            const nextReaction = getReactionById(e.target.value)
+            store.activeReactionId = nextReaction.id
+            store.temperatureK = nextReaction.defaultTempK
+            store.order = nextReaction.order
+            store.simTime = 0
+          },
+          onchange: (e: any) => {
             const nextReaction = getReactionById(e.target.value)
             store.activeReactionId = nextReaction.id
             store.temperatureK = nextReaction.defaultTempK
@@ -89,6 +106,9 @@ export function KineticsWorkbench(): VNode {
           onInput: (e: any) => {
             store.temperatureK = parseFloat(e.target.value)
           },
+          oninput: (e: any) => {
+            store.temperatureK = parseFloat(e.target.value)
+          },
           class: 'w-24 sm:w-32 accent-amber-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
         H('span', { class: 'text-amber-300 font-bold min-w-[55px]' }, `${store.temperatureK.toFixed(0)} K`),
@@ -97,6 +117,7 @@ export function KineticsWorkbench(): VNode {
             H('button', {
               type: 'button',
               onClick: () => { store.temperatureK = t },
+              onclick: () => { store.temperatureK = t },
               class: `rounded px-1.5 py-0.5 text-[10px] font-mono transition ${
                 Math.abs(store.temperatureK - t) < 5
                   ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
@@ -112,6 +133,7 @@ export function KineticsWorkbench(): VNode {
         H('button', {
           type: 'button',
           onClick: () => { store.catalystEnabled = !store.catalystEnabled },
+          onclick: () => { store.catalystEnabled = !store.catalystEnabled },
           class: `rounded-md px-3 py-1 font-mono text-xs font-bold transition flex items-center gap-1.5 shadow-sm ${
             store.catalystEnabled
               ? 'bg-emerald-500 text-black shadow-emerald-500/20'
@@ -137,6 +159,7 @@ export function KineticsWorkbench(): VNode {
           key: tab.id,
           type: 'button',
           onClick: () => { store.activeTab = tab.id as any },
+          onclick: () => { store.activeTab = tab.id as any },
           class: `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
             isActive
               ? 'bg-gradient-to-r from-amber-500/20 to-sky-500/20 text-amber-300 border border-amber-400/30'

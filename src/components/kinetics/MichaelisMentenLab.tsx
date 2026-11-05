@@ -240,6 +240,7 @@ export function MichaelisMentenLab({
             key: mode,
             type: 'button',
             onClick: () => onParamsChange({ ...params, inhibitorType: mode }),
+            onclick: () => onParamsChange({ ...params, inhibitorType: mode }),
             class: `rounded px-2 py-1 text-[11px] font-mono font-bold transition ${
               isActive
                 ? 'bg-rose-500 text-white shadow-md'
@@ -292,6 +293,7 @@ export function MichaelisMentenLab({
           step: '5',
           value: String(vMax),
           onInput: (e: any) => onParamsChange({ ...params, vMax: parseFloat(e.target.value) }),
+          oninput: (e: any) => onParamsChange({ ...params, vMax: parseFloat(e.target.value) }),
           class: 'w-full accent-sky-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
       ),
@@ -308,6 +310,7 @@ export function MichaelisMentenLab({
           step: '5',
           value: String(kM),
           onInput: (e: any) => onParamsChange({ ...params, kM: parseFloat(e.target.value) }),
+          oninput: (e: any) => onParamsChange({ ...params, kM: parseFloat(e.target.value) }),
           class: 'w-full accent-amber-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
       ),
@@ -324,6 +327,7 @@ export function MichaelisMentenLab({
           step: '2',
           value: String(inhibitorConcI),
           onInput: (e: any) => onParamsChange({ ...params, inhibitorConcI: parseFloat(e.target.value) }),
+          oninput: (e: any) => onParamsChange({ ...params, inhibitorConcI: parseFloat(e.target.value) }),
           class: 'w-full accent-rose-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
       ),
@@ -340,6 +344,7 @@ export function MichaelisMentenLab({
           step: '2',
           value: String(kI),
           onInput: (e: any) => onParamsChange({ ...params, kI: parseFloat(e.target.value) }),
+          oninput: (e: any) => onParamsChange({ ...params, kI: parseFloat(e.target.value) }),
           class: 'w-full accent-purple-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
       ),

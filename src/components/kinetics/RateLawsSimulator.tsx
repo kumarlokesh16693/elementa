@@ -238,6 +238,7 @@ export function RateLawsSimulator({
             key: ord,
             type: 'button',
             onClick: () => onOrderChange(ord),
+            onclick: () => onOrderChange(ord),
             class: `rounded px-2.5 py-1 text-[11px] font-mono font-bold transition ${
               isActive
                 ? 'bg-sky-400 text-black shadow-md'
@@ -275,6 +276,7 @@ export function RateLawsSimulator({
           step: '0.05',
           value: String(initialConcA),
           onInput: (e: any) => onInitialConcChange(parseFloat(e.target.value)),
+          oninput: (e: any) => onInitialConcChange(parseFloat(e.target.value)),
           class: 'w-full accent-sky-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
       ),
@@ -291,6 +293,7 @@ export function RateLawsSimulator({
           step: '0.02',
           value: String(rateConstantK),
           onInput: (e: any) => onRateConstantChange(parseFloat(e.target.value)),
+          oninput: (e: any) => onRateConstantChange(parseFloat(e.target.value)),
           class: 'w-full accent-amber-400 h-1 bg-zinc-700 rounded cursor-pointer',
         }),
       ),
