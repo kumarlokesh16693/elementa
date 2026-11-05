@@ -18,6 +18,8 @@
 | **`/thermo.html`** | Thermodynamics & Heat Engines Lab | PV Diagrams, Heat-Engine Cycles, Entropy, Kinetic Theory, Blackbody Radiation | `<elementa-thermo>` |
 | **`/relativity.html`** | Special Relativity Lab | Lorentz Boosts, Length Contraction, Time Dilation, Relativistic Doppler, Muon Decay | `<elementa-relativity>` |
 | **`/quantumwave.html`** | 1D Quantum Wave Laboratory | Schrödinger Eigenstates, Heisenberg Uncertainty, Crank–Nicolson Wave Packets, Tunnelling | `<elementa-quantumwave>` |
+| **`/optics.html`** | Optics & Wave Phenomena Laboratory | Fraunhofer Diffraction, N-Slit Interference, Fringe Spacing, Grating Resolving Power | `<elementa-optics>` |
+| **`/bands.html`** | Solid-State Band Theory Laboratory | Tight-Binding Bands, Fermi Surfaces, Density of States, Peierls & Dirac Gaps | `<elementa-bands>` |
 | **`/synthesizer.html`** | Compound & Reaction Synthesizer Lab | Thermochemistry, Stoichiometry, Gibbs Free Energy & Equilibrium, 3D Molecular Structures | `<elementa-compound-3d>` |
 | **`/references.html`** | Scientific References & CODATA Constants | Physical Constants, Precision Metrology, SI Base Units | Pure `nexus-framework` virtual DOM |
 | **`/integrity.html`** | Cryptographic Data Audit & Provenance | Data Authenticity (NIST, IAEA, CODATA, IUPAC) | Pure `nexus-framework` virtual DOM |
@@ -314,7 +316,38 @@
 
 ---
 
-## ⚗️ 10. Compound & Chemical Reaction Synthesizer (`/synthesizer.html`)
+## 🎨 10. Optics & Wave Phenomena Laboratory (`/optics.html`)
+
+- **3D Near-Field Ripple Tank (`<elementa-optics>`)**:
+  - Every slit is treated as a coherent line source; the shared scalar field is precomputed per geometry as $\sum A\cos kr$ and $\sum A\sin kr$, so animation costs a single multiply-add per vertex per frame.
+  - Crests are tinted with the wavelength's physical RGB and troughs a deep indigo; the aperture wall and slit markers are rebuilt and re-tinted whenever λ, a, d or N changes.
+  - Adding slits sharpens the far field into narrow beams; widening the slit narrows the central beam — the near-field view makes the two length scales visible.
+- **Exact Fraunhofer overlay**:
+  - $I(\theta) = \operatorname{sinc}^2(\pi a\sin\theta/\lambda)\cdot\left[\sin(N\pi d\sin\theta/\lambda)/(N\sin(\pi d\sin\theta/\lambda))\right]^2$ evaluated per screen pixel against the exact spherical mapping $\sin\theta = y/\sqrt{y^2+L^2}$.
+  - Single-slit envelope drawn dashed, principal maxima annotated on an order ruler, and a colour-coded on-screen fringe strip rendered for the current wavelength.
+- **Fringe geometry readouts**: $\Delta y = \lambda L/d$, first-order angle $\arcsin(\lambda/d)$, visible orders $\pm\lfloor d/\lambda \rfloor$, envelope first zero $\arcsin(\lambda/a)$ — reported as absent when the slit is narrower than one wavelength.
+- **Grating resolving power**: Rayleigh $R = mN$ and $\Delta\lambda = \lambda/(mN)$ shown at $m = 1$ and at the highest visible order — a 10-slit grating at $m = 5$ resolves about $1/50$ of the wavelength.
+- **Interactive**: single / double / grating modes, wavelength 380–780 nm with a live spectral swatch, slit width $a$, separation $d$, slit count $N$, screen distance $L$, wave animation speed and phase reset; all state is URL-synced.
+
+---
+
+## 🔷 11. Solid-State Band Theory Laboratory (`/bands.html`)
+
+- **3D tight-binding dispersion (`<elementa-bands>`)**:
+  - Nearest-neighbour dispersion drawn over the first Brillouin zone: a single sheet for the 1D chain and square lattice, separate valence/conduction sheets for the dimerized chain and honeycomb lattice.
+  - Vertex colours switch at the Fermi level — occupied states cyan, empty states amber — with a translucent $E_F$ plane and the BZ outline anchoring k-space.
+  - Four models: $E(k) = -2t\cos(ka)$; SSH $E_\pm = \pm\sqrt{t_1^2 + t_2^2 + 2t_1t_2\cos ka}$; square $E = -2t(\cos k_x a + \cos k_y a)$; honeycomb $E_\pm = \pm\sqrt{|f(k)|^2 + \Delta^2}$ with massless Dirac points at $|K| = 4\pi/(3a)$.
+- **Exact band analysis**:
+  - Band diagram along $\Gamma$–X–M–$\Gamma$ or $\Gamma$–M–K–$\Gamma$ (and $-\pi/a \to \pi/a$ in 1D), with occupied and empty segments coloured against $E_F$.
+  - DOS as a Gaussian-smoothed histogram on a shared energy axis (states eV⁻¹ cell⁻¹), normalised to 2 spin states per band.
+  - Fermi surface traced in k-space: the hexagonal BZ for honeycomb, the square BZ for the square lattice, and the two Fermi points in 1D.
+- **Thermodynamics of filling**: $E_F$ solves $(2/n_k)\sum_k f(E,\mu) = \nu\cdot(\text{sites/cell})$ with Fermi–Dirac statistics at 0–800 K; moving $\nu$ off half filling drives the semimetal → semiconductor → doped-metal transition.
+- **Derived quantities**: bandwidth $W$, gap $E_g$ ($4\delta$ for SSH, $2\Delta$ for gapped graphene), effective mass $m^*/m_e$ from the band-edge curvature, $g(E_F)$, and a metal / semimetal / semiconductor / insulator / doped classification with the gap compared to $kT$.
+- **Interactive**: four lattice models, hopping $t$, lattice constant $a$, dimerization $\delta$ or sublattice gap $\Delta$, filling $\nu$, temperature $T$, auto-rotation and view reset; all state is URL-synced.
+
+---
+
+## ⚗️ 12. Compound & Chemical Reaction Synthesizer (`/synthesizer.html`)
 
 - **Interactive Element Combiner Workbench**:
   - Multi-element selection (up to 5 elements simultaneously) to discover and synthesize matching binary and ternary compounds.
@@ -338,7 +371,7 @@
 
 ---
 
-## 💎 11. 3D Crystal Lattice & Powder X-Ray Diffraction (XRD) Lab (`/crystal.html`)
+## 💎 13. 3D Crystal Lattice & Powder X-Ray Diffraction (XRD) Lab (`/crystal.html`)
 
 - **14 Bravais Lattices & 7 Crystal Systems**:
   - Full crystallographic support spanning Cubic, Tetragonal, Orthorhombic, Hexagonal, Rhombohedral, Monoclinic, and Triclinic systems.
@@ -361,7 +394,7 @@
 
 ---
 
-## ⚡ 12. Electrochemistry & Battery Lab (`/electrochemistry.html`)
+## ⚡ 14. Electrochemistry & Battery Lab (`/electrochemistry.html`)
 
 - **Interactive Galvanic / Voltaic Cell Apparatus**:
   - Dual beaker configuration: Anode (oxidation, mass dissolution) and Cathode (reduction, neutral metal deposition).
@@ -382,7 +415,7 @@
 
 ---
 
-## 🌈 13. Molecular Vibrational Modes & Spectroscopy Lab (`/spectroscopy.html`)
+## 🌈 15. Molecular Vibrational Modes & Spectroscopy Lab (`/spectroscopy.html`)
 
 - **Interactive 3D Normal Vibrational Modes Engine (`<elementa-vibrational-3d>`)**:
   - Real-time WebGL coordinate oscillation for normal modes:
@@ -411,7 +444,7 @@
 
 ---
 
-## 🧪 14. Reaction Kinetics & Eyring-Arrhenius Catalysis Simulator (`/kinetics.html`)
+## 🧪 16. Reaction Kinetics & Eyring-Arrhenius Catalysis Simulator (`/kinetics.html`)
 
 - **Interactive Reaction Coordinate Potential Energy Profile**:
   - Plots Potential Energy $E$ vs Reaction Coordinate Progress $\xi$ (Reactants $\to$ Transition State $[\text{TS}]^\ddagger$ $\to$ Products).
@@ -447,7 +480,32 @@
 
 ---
 
-## 🛡️ 15. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## ⚛️ 17. Nuclear Fission Reactor Core & Criticality Simulator (`/reactor.html`)
+
+- **Interactive 3D Reactor Core WebGL Visualizer (`<elementa-reactor-3d>`)**:
+  - $7 \times 7$ fuel assembly lattice with cylindrical $\text{UO}_2$ fuel pins in Zircaloy cladding, lower and upper grid spacer plates, and control rod guide thimbles.
+  - Symmetrical Control Rod Spider Assembly ($\text{B}_4\text{C}$ neutron absorber poison) with continuous vertical travel driven by the control rod position slider.
+  - Real-time electric-cyan Cherenkov radiation glow intensity ($\propto \Phi^{1.25}$) and fuel rod thermal heat coloration (cool blue-grey $\to$ glowing yellow/white $\to$ supercritical fiery crimson).
+- **Point Kinetics with 6-Group Delayed Neutrons**:
+  - Keepin 6-group delayed neutron precursor formulation for $^{235}\text{U}$ thermal fission:
+    $$\frac{dn}{dt} = \frac{\rho - \beta}{\Lambda} n + \sum_{i=1}^6 \lambda_i C_i, \quad \frac{dC_i}{dt} = \frac{\beta_i}{\Lambda} n - \lambda_i C_i$$
+  - Real-time telemetry: Effective multiplication factor $k_{\text{eff}}$, Reactivity $\rho$ in pcm and dollars ($\$ = \rho / \beta$), and reactor period $T$ (seconds).
+  - Four distinct operational regimes: Subcritical ($k_{\text{eff}} < 1$), Steady-state Critical ($k_{\text{eff}} = 1.000$), Delayed Supercritical ($1.000 < k_{\text{eff}} < 1.0065$), and Prompt Critical ($k_{\text{eff}} \ge 1 + \beta$).
+- **Inherent Safety Feedback & Reactivity Balance**:
+  - Fuel Doppler broadening coefficient ($\alpha_D < 0$) providing instantaneous resonance absorption in $^{238}\text{U}$.
+  - Moderator Temperature Coefficient (MTC, $\alpha_M < 0$) and chemical shim soluble boron concentration (ppm).
+  - Emergency SCRAM: Gravity-driven rapid insertion dropping control rods to 100% in $<2.2\,\text{seconds}$.
+- **Xenon-135 Poisoning & Chernobyl Iodine Pit Transient**:
+  - Differential tracking of $^{135}\text{I}$ ($T_{1/2} = 6.57\,\text{hr}$) and $^{135}\text{Xe}$ ($T_{1/2} = 9.17\,\text{hr}$, $\sigma_a = 2.6 \times 10^6\,\text{barns}$).
+  - 48-hour post-shutdown transient plot highlighting the peak poisoning pit at ~10 hours post-trip ($\Delta\rho_{\text{Xe}} \approx -2800\,\text{pcm}$), explaining the fundamental reactor physics error behind the Chernobyl disaster.
+- **Thermal-Hydraulics & Steam Turbine Electric Generation**:
+  - Primary loop RPV inlet/outlet coolant temperatures and fuel centerline temperature.
+  - Secondary steam cycle pressure ($\text{MPa}$), steam turbine generator shaft speed ($1800\,\text{RPM}$ / $60\,\text{Hz}$), and net electric grid power output ($1150\,\text{MW}_{\text{e}}$).
+- **Engineering Presets**: Westinghouse 4-Loop PWR, General Electric BWR/6, CANDU-6 Heavy Water Reactor, NuScale SMR, and HTGR Pebble Bed.
+
+---
+
+## 🛡️ 18. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).
@@ -458,7 +516,7 @@
 
 ---
 
-## ⚡ 11. Technology Stack & Framework Purity
+## ⚡ 18. Technology Stack & Framework Purity
 
 - **Core Engine**: Pure **`nexus-framework`** (`mount`, `patch`, `effect`, `reactive`, `h`, `VNode`).
 - **3D Graphics**: **`@nexus/3d`** WebGL hardware-accelerated rendering.

@@ -60,6 +60,8 @@ export default function CrystalPage(): VNode {
         navBtn('Thermo lab', './thermo.html'),
         navBtn('Relativity lab', './relativity.html'),
         navBtn('Quantum wave lab', './quantumwave.html'),
+        navBtn('Optics lab', './optics.html'),
+        navBtn('Band theory lab', './bands.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
         navBtn('Segrè chart', './segre.html'),
         GitHubLink(),
       ),

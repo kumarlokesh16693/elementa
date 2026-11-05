@@ -42,6 +42,8 @@ Designed for researchers, educators, and university students, ELEMENTA covers at
 | **`/thermo.html`** | **Thermodynamics & Heat Engines** | PV Diagrams, Carnot/Otto/Diesel/Stirling Cycles, Entropy, Kinetic Theory, Blackbody Radiation | `<elementa-thermo>` |
 | **`/relativity.html`** | **Special Relativity Lab** | Lorentz Boosts, Length Contraction, Time Dilation, Relativistic Doppler, Muon Decay, Twin Paradox | `<elementa-relativity>` |
 | **`/quantumwave.html`** | **1D Quantum Wave Lab** | Schrödinger Eigenstates, Heisenberg Uncertainty, Wave-Packet Tunnelling | `<elementa-quantumwave>` |
+| **`/optics.html`** | **Optics & Wave Phenomena Lab** | Fraunhofer Diffraction, Multi-Slit Interference, Fringe Geometry, Grating Resolving Power | `<elementa-optics>` |
+| **`/bands.html`** | **Solid-State Band Theory Lab** | Tight-Binding Dispersion, Brillouin Zones, Fermi Surfaces, DOS, Peierls & Dirac Gaps | `<elementa-bands>` |
 | **`/references.html`** | **CODATA Reference & Citations** | Precision Metrology, SI Base Units, BibTeX | Native virtual DOM |
 | **`/integrity.html`** | **Cryptographic Data Audit** | NIST / IAEA Data Authenticity Verification | Native virtual DOM |
 

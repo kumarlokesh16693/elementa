@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070a10" />
+    <title>Nuclear Fission Reactor & Criticality Simulator — ELEMENTA</title>
+    <meta
+      name="description"
+      content="Interactive 3D nuclear fuel rod lattice, control rod insertion depth regulating k_eff and reactor period, Xenon-135 poisoning pit, Doppler feedback, and thermal-hydraulic steam turbine generator."
+    />
+    <link rel="icon" type="image/svg+xml" href="./public/logo.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-[#070a10] text-zinc-200 antialiased overflow-x-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/entries/reactor.tsx"></script>
+  </body>
+</html>
