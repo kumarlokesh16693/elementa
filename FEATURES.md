@@ -338,7 +338,30 @@
 
 ---
 
-## 🛡️ 11. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## 💎 11. 3D Crystal Lattice & Powder X-Ray Diffraction (XRD) Lab (`/crystal.html`)
+
+- **14 Bravais Lattices & 7 Crystal Systems**:
+  - Full crystallographic support spanning Cubic, Tetragonal, Orthorhombic, Hexagonal, Rhombohedral, Monoclinic, and Triclinic systems.
+  - Universal metric tensor $g_{ij}$ and reciprocal metric tensor $g^{ij}$ formulation for arbitrary lattice parameters ($a, b, c, \alpha, \beta, \gamma$).
+  - Exact Wyckoff and fractional atomic coordinates for iconic materials: Ferrite ($\alpha$-Fe BCC), Copper (FCC), Polonium (SC), Silicon / Diamond cubic, Halite ($\text{NaCl}$), Cesium Chloride ($\text{CsCl}$), Calcium Titanate Perovskite ($\text{CaTiO}_3$), Magnesium (HCP), Rutile ($\text{TiO}_2$), Graphene/Graphite, and Gallium Arsenide (GaAs).
+- **Dynamic Miller Plane $(hkl)$ Slicer**:
+  - Real-time cutting plane geometry intersecting unit cell supercells with amber translucent shading.
+  - Steppers and common symmetry plane shortcuts ($(100)$, $(110)$, $(111)$, $(200)$, $(220)$, $(311)$).
+  - Exact interplanar $d$-spacing calculation:
+    $$\frac{1}{d_{hkl}^2} = \sum_{i,j} h_i g^{ij} h_j$$
+- **Powder X-Ray Diffractometer & Bragg's Law Engine**:
+  - Real-time Bragg's Law simulation: $\lambda = 2d_{hkl}\sin\theta$.
+  - Structure factor and systematic extinction calculations:
+    $$F_{hkl} = \sum_j f_j \exp\left(2\pi i (h u_j + k v_j + l w_j)\right)$$
+  - Lorentz-polarization factor and reflection multiplicity corrections.
+  - Variable X-ray anode sources: $\text{Cu } K_\alpha$ ($1.5406\text{ \AA}$), $\text{Mo } K_\alpha$ ($0.7107\text{ \AA}$), $\text{Co } K_\alpha$ ($1.7890\text{ \AA}$), $\text{Cr } K_\alpha$ ($2.2909\text{ \AA}$), and Synchrotron ($0.5000\text{ \AA}$).
+  - Scherrer crystallite size line broadening ($L = 5\text{ nm} \to 100\text{ nm}$):
+    $$\beta = \frac{K \lambda}{L \cos\theta}$$
+  - Interactive spectrum canvas: Click any Bragg reflection peak to automatically slice and orient the corresponding $(hkl)$ plane in the 3D visualizer.
+
+---
+
+## 🛡️ 12. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).
