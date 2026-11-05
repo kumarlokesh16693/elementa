@@ -1,1 +1,0 @@
-var r=Object.defineProperty;var m=(s,e,n)=>e in s?r(s,e,{enumerable:!0,configurable:!0,writable:!0,value:n}):s[e]=n;var t=(s,e,n)=>m(s,typeof e!="symbol"?e+"":e,n);import{L}from"./OrbitControls-dwX2Rayh.js";class c extends L{constructor(n,i){super(n,i);t(this,"isLineSegments",!0);this.name="LineSegments"}}export{c as L};

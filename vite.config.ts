@@ -113,6 +113,7 @@ export default defineConfig({
         relativity: path.resolve(__dirname, 'relativity.html'),
         quantumwave: path.resolve(__dirname, 'quantumwave.html'),
         synthesizer: path.resolve(__dirname, 'synthesizer.html'),
+        crystal: path.resolve(__dirname, 'crystal.html'),
         integrity: path.resolve(__dirname, 'integrity.html'),
       },
     },
