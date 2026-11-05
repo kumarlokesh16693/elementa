@@ -52,6 +52,7 @@ export default function SpectroscopyPage(): VNode {
       ),
       H('div', { class: 'ml-auto flex items-center gap-1.5 overflow-x-auto max-w-full' },
         navBtn('Periodic table', './index.html'),
+        navBtn('Kinetics', './kinetics.html', 'border-amber-400/40 bg-amber-400/10 text-amber-300'),
         navBtn('Electrochem', './electrochemistry.html'),
         navBtn('Crystal & XRD', './crystal.html'),
         navBtn('Synthesizer', './synthesizer.html'),

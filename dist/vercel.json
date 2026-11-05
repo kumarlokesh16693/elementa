@@ -6,6 +6,7 @@
     { "source": "/crystal", "destination": "/crystal.html" },
     { "source": "/electrochemistry", "destination": "/electrochemistry.html" },
     { "source": "/spectroscopy", "destination": "/spectroscopy.html" },
+    { "source": "/kinetics", "destination": "/kinetics.html" },
     { "source": "/mo", "destination": "/mo.html" },
     { "source": "/orbitals", "destination": "/orbitals.html" },
     { "source": "/em", "destination": "/em.html" },

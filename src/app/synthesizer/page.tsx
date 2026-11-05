@@ -60,6 +60,7 @@ export default function SynthesizerPage(): VNode {
       H('div', { class: 'ml-auto flex items-center gap-1.5 overflow-x-auto max-w-full' },
         navBtn('Periodic table', './index.html'),
         navBtn('Spectroscopy', './spectroscopy.html', 'border-purple-400/40 bg-purple-400/10 text-purple-300'),
+        navBtn('Kinetics', './kinetics.html', 'border-amber-400/40 bg-amber-400/10 text-amber-300'),
         navBtn('Electrochem', './electrochemistry.html', 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'),
         navBtn('Crystal & XRD', './crystal.html'),
         navBtn('MO builder', './mo.html'),

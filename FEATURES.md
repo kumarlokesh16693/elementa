@@ -411,7 +411,43 @@
 
 ---
 
-## 🛡️ 14. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## 🧪 14. Reaction Kinetics & Eyring-Arrhenius Catalysis Simulator (`/kinetics.html`)
+
+- **Interactive Reaction Coordinate Potential Energy Profile**:
+  - Plots Potential Energy $E$ vs Reaction Coordinate Progress $\xi$ (Reactants $\to$ Transition State $[\text{TS}]^\ddagger$ $\to$ Products).
+  - Forward activation barrier ($E_{a,\text{fwd}}$), reverse activation barrier ($E_{a,\text{rev}}$), and reaction enthalpy ($\Delta H_{\text{rxn}}$).
+  - Multi-step catalytic pathway rendering: Alternate lower-energy route with intermediate binding well and reduced transition state peaks ($[\text{Cat-TS}_1]^\ddagger, [\text{Cat-TS}_2]^\ddagger$).
+- **Maxwell-Boltzmann Kinetic Energy Distribution Engine**:
+  - Probability density function:
+    $$f(E) = 2\sqrt{\frac{E}{\pi}} \left(\frac{1}{R T}\right)^{3/2} \exp\left(-\frac{E}{RT}\right)$$
+  - Dual threshold indicators for uncatalyzed $E_a$ vs catalyzed $E_{a,\text{cat}}$.
+  - Shaded reactive collision fractions $f = \exp(-E_a / RT)$ and real-time catalytic acceleration ratio ($\frac{k_{\text{cat}}}{k_{\text{uncat}}} = \exp\left(\frac{\Delta E_a}{RT}\right)$) reaching millions-fold speedups.
+- **Eyring-Polanyi Transition State Theory & Arrhenius Engine**:
+  - Arrhenius rate constant:
+    $$k(T) = A \exp\left(-\frac{E_a}{RT}\right)$$
+  - Eyring-Polanyi transition state formulation:
+    $$k(T) = \frac{\kappa k_B T}{h} \exp\left(\frac{\Delta S^\ddagger}{R}\right) \exp\left(-\frac{\Delta H^\ddagger}{RT}\right)$$
+  - Quantitative telemetry for $\Delta H^\ddagger$, $\Delta S^\ddagger$, and transmission coefficient $\kappa$.
+- **Integrated Rate Laws Simulator**:
+  - Trajectory solver for Zero-Order (linear decay), First-Order (exponential decay), Second-Order (hyperbolic decay), and Consecutive Multistep ($A \xrightarrow{k_1} B \xrightarrow{k_2} C$).
+  - Half-life markers ($t_{1/2} = [A]_0 / 2k$, $t_{1/2} = \ln 2 / k$, $t_{1/2} = 1 / (k [A]_0)$) and time-scrubbing needle.
+- **Michaelis-Menten Enzyme Kinetics & Lineweaver-Burk Double Reciprocal Bench**:
+  - Hyperbolic substrate velocity curve $v = \frac{V_{\max} [S]}{K_m + [S]}$ alongside Lineweaver-Burk linear transformation:
+    $$\frac{1}{v} = \left(\frac{K_m}{V_{\max}}\right) \frac{1}{[S]} + \frac{1}{V_{\max}}$$
+  - Interactive enzyme inhibition modes:
+    - **Competitive Inhibition**: Active site competition; increases apparent $K_m^{\text{app}} = K_m(1 + [I]/K_I)$ while leaving $V_{\max}$ unchanged; lines intersect at the $y$-axis ($1/V_{\max}$).
+    - **Non-Competitive Inhibition**: Allosteric binding; decreases $V_{\max}^{\text{app}} = V_{\max}/(1 + [I]/K_I)$ while leaving $K_m$ unchanged; lines intersect at the $x$-axis ($-1/K_m$).
+    - **Uncompetitive Inhibition**: Binds solely to the ES complex; both $V_{\max}$ and $K_m$ decrease by the same factor; yields parallel Lineweaver-Burk lines.
+- **Benchmark Reaction Catalog**:
+  - Catalase enzymatic decomposition ($2\text{H}_2\text{O}_2 \to 2\text{H}_2\text{O} + \text{O}_2$, $E_a$ slashed from $75.3 \to 8.0\,\text{kJ/mol}$).
+  - Haber-Bosch ammonia synthesis ($\text{N}_2 + 3\text{H}_2 \rightleftharpoons 2\text{NH}_3$ over promoted $\alpha\text{-Fe}(111)$, $E_a$ slashed from $335 \to 160\,\text{kJ/mol}$).
+  - Automotive three-way catalytic reduction ($\text{CO} + \text{NO} \to \text{CO}_2 + \frac{1}{2}\text{N}_2$ on $\text{Pt/Rh}$).
+  - Alkaline ester saponification ($\text{CH}_3\text{COOC}_2\text{H}_5 + \text{OH}^-$ bimolecular second order).
+  - Invertase sucrose inversion and gas-phase $\text{NO}_2$ decomposition.
+
+---
+
+## 🛡️ 15. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).
