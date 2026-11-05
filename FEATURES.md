@@ -382,7 +382,36 @@
 
 ---
 
-## 🛡️ 13. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## 🌈 13. Molecular Vibrational Modes & Spectroscopy Lab (`/spectroscopy.html`)
+
+- **Interactive 3D Normal Vibrational Modes Engine (`<elementa-vibrational-3d>`)**:
+  - Real-time WebGL coordinate oscillation for normal modes:
+    $$\vec{r}_i(t) = \vec{r}_i^0 + A \cdot \sin(2\pi f t) \cdot \vec{d}_i$$
+  - Dynamic bond stretching, compression, and orientation tracking using dynamic `CylinderGeometry` scaling and rotation matrices.
+  - Interactive mode controller: Play/Pause, vibration amplitude ($0.1\times \to 3.0\times$), animation speed ($0.2\times \to 2.5\times$), mode stepping, and camera orbit/zoom.
+  - Reduced mass ($\mu$), harmonic force constant ($k$), and zero-point energy (ZPE) calculations:
+    $$\mu = \frac{m_1 m_2}{m_1 + m_2}, \quad \tilde{\nu} = \frac{1}{2\pi c}\sqrt{\frac{k}{\mu}}, \quad E_0 = \frac{1}{2}h\nu_0$$
+- **High-Resolution FTIR Transmittance Spectrum ($4000 \to 400\,\text{cm}^{-1}$)**:
+  - Reverse wavenumber axis following IUPAC spectroscopy convention ($4000\,\text{cm}^{-1}$ on left, $400\,\text{cm}^{-1}$ on right) with inverted transmittance troughs ($T\% = 100\% \to 0\%$).
+  - Continuous Lorentzian absorption line-shape generation for individual normal modes and broad hydrogen-bonded ensembles.
+  - Clickable absorption troughs that instantly activate the corresponding 3D vibrational mode.
+  - Functional group diagnostic zone overlays:
+    - **Single Bond Stretch Zone** ($4000 - 2500\,\text{cm}^{-1}$): $\text{O-H}$ hydrogen bonding, $\text{N-H}$ amine/amide, $\text{C-H}$ sp/sp²/sp³ stretches.
+    - **Triple Bond Zone** ($2500 - 2000\,\text{cm}^{-1}$): $\text{C}\equiv\text{C}$ alkynes, $\text{C}\equiv\text{N}$ nitriles, cumulative allenes.
+    - **Double Bond Zone** ($2000 - 1500\,\text{cm}^{-1}$): Intense $\text{C=O}$ carbonyls (esters, ketones, aldehydes), $\text{C=C}$ alkenes, aromatic rings.
+    - **Fingerprint Zone** ($1500 - 400\,\text{cm}^{-1}$): Complex skeletal bending, rocking, wagging, and twisting modes.
+- **Interactive UV-Vis Spectrophotometer & Beer-Lambert Law Bench**:
+  - Optomechanical apparatus featuring a collimated laser beam, quartz cuvette, transmitted light ray, and digital photodetector.
+  - Real-time Beer-Lambert attenuation physics:
+    $$A = \varepsilon \cdot b \cdot c, \quad T = 10^{-A}, \quad \%T = 100 \times 10^{-A}$$
+  - Dynamic interactive sliders for cuvette path length ($b \in 0.1 \to 5.0\,\text{cm}$), solute concentration ($c \in 0.001 \to 0.50\,\text{M}$), and molar absorptivity ($\varepsilon \in 10 \to 5000\,\text{L}/(\text{mol}\cdot\text{cm})$).
+  - Dynamic range detector warnings: Optimal linear detection ($0.1 \le A \le 1.5$), noisy regime ($A < 0.1$), and detector saturation ($A > 2.0$).
+- **Curated Molecular Catalog**:
+  - Research benchmarks including Water ($\text{H}_2\text{O}$), Carbon Dioxide ($\text{CO}_2$ with greenhouse active $15\,\mu\text{m}$ bending mode and IR-inactive symmetric stretch), Acetone ($\text{CH}_3\text{COCH}_3$ carbonyl), Ethanol ($\text{C}_2\text{H}_5\text{OH}$ hydrogen bonding), Potassium Permanganate ($\text{KMnO}_4$ intense LMCT transition at $525\,\text{nm}$), and Copper(II) Sulfate ($\text{CuSO}_4$ Jahn-Teller $d-d$ transition at $810\,\text{nm}$).
+
+---
+
+## 🛡️ 14. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).

@@ -115,6 +115,7 @@ export default defineConfig({
         synthesizer: path.resolve(__dirname, 'synthesizer.html'),
         crystal: path.resolve(__dirname, 'crystal.html'),
         electrochemistry: path.resolve(__dirname, 'electrochemistry.html'),
+        spectroscopy: path.resolve(__dirname, 'spectroscopy.html'),
         integrity: path.resolve(__dirname, 'integrity.html'),
       },
     },

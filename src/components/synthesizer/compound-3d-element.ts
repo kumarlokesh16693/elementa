@@ -186,7 +186,14 @@ export class ElementaCompound3DElement extends HTMLElement {
     const atomRadiusMult = style === 'space-filling' ? 1.6 : style === 'wireframe' ? 0.35 : 0.85
     const bondRadius = style === 'wireframe' ? 0.025 : 0.075
 
-    // 1. Render Atoms
+    // Calculate centroid of the compound to ensure perfect centering for lattices (e.g. NaCl) and asymmetric molecules
+    const centroid = new Vector3(0, 0, 0)
+    compound.atoms3D.forEach((a) => {
+      centroid.add(new Vector3(a.position[0], a.position[1], a.position[2]))
+    })
+    centroid.divideScalar(compound.atoms3D.length)
+
+    // 1. Render Atoms (centered at origin)
     compound.atoms3D.forEach((atom) => {
       const baseR = atom.radius ?? 0.35
       const finalR = baseR * atomRadiusMult
@@ -200,11 +207,15 @@ export class ElementaCompound3DElement extends HTMLElement {
 
       const geo = new SphereGeometry(finalR, 28, 28)
       const mesh = new Mesh(geo, mat)
-      mesh.position.set(atom.position[0], atom.position[1], atom.position[2])
+      mesh.position.set(
+        atom.position[0] - centroid.x,
+        atom.position[1] - centroid.y,
+        atom.position[2] - centroid.z,
+      )
       this.modelGroup!.add(mesh)
     })
 
-    // 2. Render Bonds
+    // 2. Render Bonds (centered at origin)
     if (style !== 'space-filling') {
       const bondMat = new MeshStandardMaterial({
         color: new Color('#71717a'),
@@ -217,8 +228,16 @@ export class ElementaCompound3DElement extends HTMLElement {
         const atomB = compound.atoms3D[bond.to]
         if (!atomA || !atomB) return
 
-        const pA = new Vector3(...atomA.position)
-        const pB = new Vector3(...atomB.position)
+        const pA = new Vector3(
+          atomA.position[0] - centroid.x,
+          atomA.position[1] - centroid.y,
+          atomA.position[2] - centroid.z,
+        )
+        const pB = new Vector3(
+          atomB.position[0] - centroid.x,
+          atomB.position[1] - centroid.y,
+          atomB.position[2] - centroid.z,
+        )
         const diff = new Vector3().subVectors(pB, pA)
         const len = diff.length()
         if (len < 1e-4) return
@@ -253,18 +272,26 @@ export class ElementaCompound3DElement extends HTMLElement {
       })
     }
 
-    // Auto-fit camera distance based on bounding dimensions (including atom radii)
+    // Auto-fit camera distance based on centered bounding dimensions (including atom radii)
     let maxDist = 1.0
     compound.atoms3D.forEach((atom) => {
-      const d = Math.sqrt(atom.position[0] ** 2 + atom.position[1] ** 2 + atom.position[2] ** 2)
+      const p = new Vector3(
+        atom.position[0] - centroid.x,
+        atom.position[1] - centroid.y,
+        atom.position[2] - centroid.z,
+      )
+      const d = p.length()
       const r = (atom.radius ?? 0.35) * (style === 'space-filling' ? 1.6 : 0.85)
       if (d + r > maxDist) maxDist = d + r
     })
-    const targetDist = Math.max(3.0, maxDist * 3.1)
+    const targetDist = Math.max(3.2, maxDist * 3.4)
     if (this.camera) {
-      this.camera.position.set(0, targetDist * 0.25, targetDist)
+      this.camera.position.set(0, targetDist * 0.22, targetDist)
       this.camera.lookAt(0, 0, 0)
-      this.controls?.update()
+      if (this.controls) {
+        this.controls.target.set(0, 0, 0)
+        this.controls.update()
+      }
     }
   }
 }
