@@ -53,6 +53,7 @@ export default function CrystalPage(): VNode {
       H('div', { class: 'ml-auto flex items-center gap-1.5 overflow-x-auto max-w-full' },
         navBtn('Periodic table', './index.html'),
         navBtn('Synthesizer', './synthesizer.html'),
+        navBtn('Electrochem', './electrochemistry.html'),
         navBtn('MO builder', './mo.html'),
         navBtn('Orbital lab', './orbitals.html'),
         navBtn('EM lab', './em.html'),

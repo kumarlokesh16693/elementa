@@ -114,6 +114,7 @@ export default defineConfig({
         quantumwave: path.resolve(__dirname, 'quantumwave.html'),
         synthesizer: path.resolve(__dirname, 'synthesizer.html'),
         crystal: path.resolve(__dirname, 'crystal.html'),
+        electrochemistry: path.resolve(__dirname, 'electrochemistry.html'),
         integrity: path.resolve(__dirname, 'integrity.html'),
       },
     },
