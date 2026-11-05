@@ -361,7 +361,28 @@
 
 ---
 
-## 🛡️ 12. Cryptographic Integrity & Standards Verification (`/integrity.html`)
+## ⚡ 12. Electrochemistry & Battery Lab (`/electrochemistry.html`)
+
+- **Interactive Galvanic / Voltaic Cell Apparatus**:
+  - Dual beaker configuration: Anode (oxidation, mass dissolution) and Cathode (reduction, neutral metal deposition).
+  - Inverted U-shaped salt bridge maintaining electroneutrality with animated counter-ion migration ($\text{K}^+$ migrating to cathode, $\text{NO}_3^- / \text{Cl}^-$ migrating to anode).
+  - External circuit with real-time electron flow and load toggle: Digital LED Voltmeter ($E_{\text{cell}}$ in Volts), incandescent light bulb with voltage-coupled luminosity, or open-circuit switch.
+- **Dynamic Nernst Equation & Thermodynamics Engine**:
+  - Temperature simulation range ($273.15\,\text{K} \to 373.15\,\text{K}$).
+  - Variable electrolyte concentrations for anode $[M^{n+}]$ and cathode $[M^{m+}]$ ($0.01\,\text{M} \to 3.0\,\text{M}$).
+  - Non-standard cell potential, reaction quotient $Q$, and Gibbs free energy:
+    $$E_{\text{cell}} = E^\circ_{\text{cell}} - \frac{R T}{n F} \ln Q, \quad \Delta G = -n F E_{\text{cell}}, \quad K = \exp\left(\frac{n F E^\circ}{R T}\right)$$
+- **Commercial Battery Architectures & OCV Discharge Curves**:
+  - Detailed profiles of 6 modern battery chemistries: Lithium-Ion (NMC 811), Lithium Iron Phosphate (LFP), All-Solid-State Li-metal, Sodium-Ion (Na-ion), Proton-Exchange Membrane Fuel Cell (PEMFC), and Flooded Lead-Acid.
+  - Interactive State of Charge ($\text{SoC}$ 0% to 100%) slider coupled with live Open-Circuit Voltage ($V_{\text{OCV}}$) discharge curve tracking.
+  - Specific energy ($\text{Wh/kg}$), volumetric density ($\text{Wh/L}$), cycle life, electrode intercalation materials, and real-world commercial applications.
+- **Standard Reduction Potential Series ($E^\circ$ vs SHE)**:
+  - 30+ curated half-reactions ranging from Fluorine ($+2.87\,\text{V}$) down to Lithium ($-3.04\,\text{V}$).
+  - 1-click galvanic cell pairing: Click any two half-reactions in the ladder to immediately assemble a custom electrochemical cell with auto-balanced stoichiometry.
+
+---
+
+## 🛡️ 13. Cryptographic Integrity & Standards Verification (`/integrity.html`)
 
 - **Dataset Provenance**:
   - NIST Atomic Spectra Database v5.11 (SHA-256 integrity checksums).
