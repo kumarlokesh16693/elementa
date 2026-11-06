@@ -606,7 +606,7 @@ export default function QuantumWavePage(): VNode {
             Htag(
               'p',
               { class: 'mt-2 text-[10px] leading-relaxed text-zinc-500' },
-              'A free Gaussian spreads because its plane-wave components fly at different phase velocities (v = p/m, each k its own): watch Δx grow. Live ⟨E⟩, ΔE drift, pre-renormalization norm error, boundary reflection telemetry, and barrier fractions are printed on the canvas overlay.',
+              'A free Gaussian spreads because its plane-wave components fly at different phase velocities (v = p/m, each k its own): watch Δx grow. Live ⟨E⟩, current and worst-case ΔE drift, pre-renormalization norm error, boundary reflection telemetry, and barrier fractions are printed on the canvas overlay.',
             ),
           )
           : Htag('span'),
@@ -616,7 +616,7 @@ export default function QuantumWavePage(): VNode {
           'div',
           { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-3 text-[10.5px] leading-relaxed text-zinc-500' },
           Htag('div', { class: 'mb-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400' }, 'Method & Visualization Semantics'),
-          `Grid: 512 points, box ≤ ±22 natural units. 3D Waterfall: Wavefunction History Waterfall plotting signed amplitude Re ψ(x, t) across past time steps (preserving phase and nodes; stationary state oscillations use illustrative frequencies proportional to Eₙ). 2D Lower Strip: Probability density |ψ|² (positive definite). Evolution: Fixed-timestep accumulator Crank–Nicolson (I + iΔtH/2)ψ⁺ = (I − iΔtH/2)ψ — frame-rate independent and exactly unitary. Internal units ħ²/2mₑ = 1; energies scale as ${fmt(HBAR2_2M_EV_A2 / ((state.lengthNm * 10) ** 2), 3)} eV per natural unit at L = ${fmt(state.lengthNm, 2)} nm.`,
+          `Grid: 512 points, box ≤ ±22 natural units. 3D Waterfall: Wavefunction History Waterfall plotting signed amplitude Re ψ(x, t) across past time steps (preserving phase and nodes). Note: the waterfall animation of a stationary state uses an illustrative rotation frequency that is monotone in Eₙ — the true transition frequency ωₙ = (Eₙ₊₁ − Eₙ)/ħ is far too fine to animate faithfully at lab scales. 2D Lower Strip: Probability density |ψ|² (positive definite). Evolution: Fixed-timestep accumulator Crank–Nicolson (I + iΔtH/2)ψ⁺ = (I − iΔtH/2)ψ — frame-rate independent and exactly unitary. Internal units ħ²/2mₑ = 1; energies scale as ${fmt(HBAR2_2M_EV_A2 / ((state.lengthNm * 10) ** 2), 3)} eV per natural unit at L = ${fmt(state.lengthNm, 2)} nm.`,
         ),
       ),
     ),

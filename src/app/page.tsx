@@ -479,6 +479,7 @@ function HomePage(): VNode {
         actionButton('Relativity lab', './relativity.html', 'border-violet-400/40 bg-violet-400/10 text-violet-300'),
         actionButton('Quantum wave lab', './quantumwave.html', 'border-f472b6/40 bg-f472b6/10 text-f472b6'),
         actionButton('BEC lab', './bec.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
+        actionButton('Particle lab', './particle.html', 'border-indigo-400/40 bg-indigo-400/10 text-indigo-300'),
         actionButton('Optics lab', './optics.html', 'border-a3e635/40 bg-a3e635/10 text-a3e635'),
         actionButton('Band theory lab', './bands.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
         actionButton('Segrè chart', './segre.html', 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'),

@@ -16,6 +16,7 @@
     { "source": "/references", "destination": "/references.html" },
     { "source": "/synthesizer", "destination": "/synthesizer.html" },
     { "source": "/bec", "destination": "/bec.html" },
+    { "source": "/particle", "destination": "/particle.html" },
     { "source": "/integrity", "destination": "/integrity.html" }
   ],
   "headers": [

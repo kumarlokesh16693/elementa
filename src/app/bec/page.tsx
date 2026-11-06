@@ -177,6 +177,15 @@ export default function BecPage(): VNode {
         H(
           'a',
           {
+            href: './particle.html',
+            class:
+              'shrink-0 rounded-md border border-indigo-400/40 bg-indigo-400/10 px-2.5 py-1 text-[11px] font-medium text-indigo-300 hover:bg-indigo-400/20 transition',
+          },
+          'Particle lab',
+        ),
+        H(
+          'a',
+          {
             href: './bands.html',
             class:
               'shrink-0 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 hover:bg-cyan-400/20 transition',

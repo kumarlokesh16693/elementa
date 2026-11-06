@@ -59,6 +59,28 @@ const RIBBON_Z = -(WATER_D / 2 + 0.42)
 
 const EIGEN_LEVELS = 10
 
+/** Precomputed colour LUT indexed by |s| bucket (s clamped to [-1, 1]) × sign.
+ *  Replaces a Math.pow(|s|, 0.6) per vertex per frame (22,528 calls per rAF).
+ *  Layout: [i * 6] .. [i * 6 + 2] = ψ > 0 (cyan ramp), [i * 6 + 3] .. [i * 6 + 5] = ψ < 0 (pink ramp). */
+const LUT_LEVELS = 256
+const LUT_MAX = LUT_LEVELS - 1
+const COLOR_LUT = new Float32Array(LUT_LEVELS * 6)
+for (let i = 0; i < LUT_LEVELS; i++) {
+  const a = Math.pow(i / LUT_MAX, 0.6)
+  const o = i * 6
+  // ψ > 0 → cyan ramp (base 0.03/0.05/0.09, tint 0.13/0.83/0.93)
+  COLOR_LUT[o] = 0.03 + 0.13 * a
+  COLOR_LUT[o + 1] = 0.05 + 0.83 * a
+  COLOR_LUT[o + 2] = 0.09 + 0.93 * a
+  // ψ < 0 → pink ramp (tint 0.96/0.45/0.71)
+  COLOR_LUT[o + 3] = 0.03 + 0.96 * a
+  COLOR_LUT[o + 4] = 0.05 + 0.45 * a
+  COLOR_LUT[o + 5] = 0.09 + 0.71 * a
+}
+
+/** Minimum interval between 2D-overlay redraws (the 3D surface stays at full rAF rate). */
+const OVERLAY_INTERVAL = 1 / 30
+
 export class ElementaQuantumWaveElement extends HTMLElement {
   private renderer: WebGLRenderer | null = null
   private scene: Scene | null = null
@@ -103,6 +125,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   private obsRight = 0
   private lastNormError = 0
   private lastBoundaryProb = 0
+  private lastEDrift = 0
+  private maxEDrift = 0
+  private maxNormError = 0
 
   // public state (page-driven)
   public system: SystemKey = 'well'
@@ -124,6 +149,8 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   private phaseT = 0
   private simT = 0
   private simAccumulator = 0
+  private animClock = 0
+  private lastOverlayDraw = -1
   private lastSeed: string | null = null
   private lastGeoSig = ''
   private lastPacketSig = ''
@@ -517,6 +544,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     this.obsRight = 0
     this.lastNormError = 0
     this.lastBoundaryProb = 0
+    this.lastEDrift = 0
+    this.maxEDrift = 0
+    this.maxNormError = 0
   }
 
   private clearWaterfall(): void {
@@ -692,6 +722,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
   private advance(dt: number): void {
     if (!this.animating || dt <= 0 || !this.grid) return
+    this.animClock += dt
 
     const mode = this.mode === 'eigen' && this.psi ? 'eigen' : 'packet'
 
@@ -718,6 +749,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
           // Record discrete norm conservation before corrective renormalization
           const normBefore = discreteNorm(this.packet, this.grid.h)
           this.lastNormError = Math.abs(normBefore - 1.0)
+          if (this.lastNormError > this.maxNormError) this.maxNormError = this.lastNormError
 
           evolvePacket(this.packet, this.grid, dtSub, this.scratch)
           renormalise(this.packet, this.grid.h)
@@ -732,6 +764,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       }
 
       this.obs = observables(this.packet.re, this.packet.im, this.grid.x, this.grid.v, this.grid.h)
+      const drift = Math.abs((this.obs.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
+      this.lastEDrift = drift
+      if (drift > this.maxEDrift) this.maxEDrift = drift
       this.lastBoundaryProb = boundaryProbability(this.packet, this.grid.h, 0.05)
       if (this.system === 'barrier') {
         const rp = regionProbs(this.packet.re, this.packet.im, this.grid.x, this.barrierWidth / 2, this.grid.h)
@@ -743,7 +778,13 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     }
 
     this.updateSurface(false)
-    this.drawOverlay()
+    // The 2D overlay does its full axis/layout work every draw; ~30 Hz is
+    // perceptually identical and roughly halves its cost in split mode. The
+    // WebGL surface above still updates at the full rAF rate.
+    if (this.animClock - this.lastOverlayDraw >= OVERLAY_INTERVAL) {
+      this.lastOverlayDraw = this.animClock
+      this.drawOverlay()
+    }
   }
 
   private pushRow(fn: (j: number) => number): void {
@@ -780,14 +821,12 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         pos[i * 3 + 0] = x
         pos[i * 3 + 1] = y
         pos[i * 3 + 2] = z
-        // colour: dark base → cyan (ψ>0) / pink (ψ<0)
-        const a = Math.pow(Math.abs(s), 0.6)
-        const tr = s >= 0 ? 0.13 : 0.96
-        const tg = s >= 0 ? 0.83 : 0.45
-        const tb = s >= 0 ? 0.93 : 0.71
-        col[i * 3 + 0] = 0.03 + tr * a
-        col[i * 3 + 1] = 0.05 + tg * a
-        col[i * 3 + 2] = 0.09 + tb * a
+        // colour: dark base → cyan (ψ>0) / pink (ψ<0), from the precomputed LUT
+        const li = (Math.abs(s) * LUT_MAX + 0.5) | 0
+        const lo = li * 6 + (s >= 0 ? 0 : 3)
+        col[i * 3 + 0] = COLOR_LUT[lo]
+        col[i * 3 + 1] = COLOR_LUT[lo + 1]
+        col[i * 3 + 2] = COLOR_LUT[lo + 2]
       }
     }
     const mesh = this.surfMesh
@@ -898,7 +937,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const scale = evScale(this.lengthNm)
     const subtitle =
       this.mode === 'eigen'
-        ? (isCompact ? `n = ${this.nState}` : `State n=${this.nState} (phase rotation)`)
+        ? (isCompact ? `n = ${this.nState}` : `State n=${this.nState} · illustrative phase (ΔE monotone in Eₙ, not physical ωₙ)`)
         : (isCompact ? 'Wave Packet' : 'Wave Packet Evolution (C–N)')
     ctx.fillStyle = '#e2e8f0'
     ctx.textAlign = 'left'
@@ -1230,8 +1269,11 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       }
     } else if (this.packet && this.obs) {
       const o = this.obs
+      const drift = Math.abs((o.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
+      this.lastEDrift = drift
+      if (drift > this.maxEDrift) this.maxEDrift = drift
       if (isCompact) {
-        lines.push(`t=${this.simT.toFixed(2)} · ⟨E⟩=${o.energy.toFixed(2)} (${(o.energy * scale).toFixed(2)} eV)`)
+        lines.push(`t=${this.simT.toFixed(2)} · ⟨E⟩=${o.energy.toFixed(2)} (${(o.energy * scale).toFixed(2)} eV) · ΔE drift ${(this.lastEDrift * 100).toFixed(2)}%`)
         lines.push(`⟨x⟩=${o.meanX.toFixed(1)} · Δx=${o.dx.toFixed(2)} · ΔxΔp/(ħ/2)=${(o.dxTimesDp / 0.5).toFixed(2)}`)
         if (this.system === 'barrier') {
           lines.push(`trans ${this.obsRight.toFixed(2)} · ref ${this.obsLeft.toFixed(2)} · T=${barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth).toFixed(2)}`)
@@ -1239,8 +1281,10 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       } else {
         lines.push(`t = ${this.simT.toFixed(2)}  ⟨E⟩ = ${o.energy.toFixed(3)} (${(o.energy * scale).toFixed(2)} eV)`)
         const drift = Math.abs((o.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
+        this.lastEDrift = drift
+        if (drift > this.maxEDrift) this.maxEDrift = drift
         const boundWarn = this.lastBoundaryProb > 0.005 ? `  ⚠️ boundary mass ${(this.lastBoundaryProb * 100).toFixed(2)}%` : ''
-        lines.push(`ΔE drift ${(drift * 100).toFixed(3)}%   pre-renorm norm err = ${this.lastNormError.toExponential(2)}${boundWarn}`)
+        lines.push(`ΔE drift ${(this.lastEDrift * 100).toFixed(3)}%  worst ${(this.maxEDrift * 100).toFixed(2)}%   pre-renorm norm err = ${this.lastNormError.toExponential(2)} / worst ${this.maxNormError.toExponential(2)}${boundWarn}`)
         lines.push(`⟨x⟩ = ${o.meanX.toFixed(2)}   Δx = ${o.dx.toFixed(2)}   ⟨p⟩ = ${o.meanP.toFixed(3)}   Δp = ${o.dp.toFixed(3)}   ΔxΔp/(ħ/2) = ${(o.dxTimesDp / 0.5).toFixed(2)}`)
         if (this.system === 'barrier') {
           const T = barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth)

@@ -123,6 +123,7 @@ export default defineConfig({
         reactor: path.resolve(__dirname, 'reactor.html'),
         integrity: path.resolve(__dirname, 'integrity.html'),
         bec: path.resolve(__dirname, 'bec.html'),
+        particle: path.resolve(__dirname, 'particle.html'),
       },
     },
   },

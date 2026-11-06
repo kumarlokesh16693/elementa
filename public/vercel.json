@@ -16,6 +16,7 @@
     { "source": "/relativity", "destination": "/relativity.html" },
     { "source": "/quantumwave", "destination": "/quantumwave.html" },
     { "source": "/bec", "destination": "/bec.html" },
+    { "source": "/particle", "destination": "/particle.html" },
     { "source": "/segre", "destination": "/segre.html" },
     { "source": "/references", "destination": "/references.html" },
     { "source": "/integrity", "destination": "/integrity.html" },
