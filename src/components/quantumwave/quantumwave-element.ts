@@ -614,9 +614,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     if (!g || !group) return
     if (this.ribbonMesh) {
       group.remove(this.ribbonMesh)
-      const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
-      if (relGeo && this.ribbonMesh.geometry) {
-        relGeo(this.ribbonMesh.geometry)
+      const r = this.renderer as (WebGLRenderer & { releaseGeometry?: (g: unknown) => void }) | null
+      if (r && typeof r.releaseGeometry === 'function' && this.ribbonMesh.geometry) {
+        r.releaseGeometry(this.ribbonMesh.geometry)
       } else if ((this.ribbonMesh.geometry as any)?.dispose) {
         (this.ribbonMesh.geometry as any).dispose()
       }
@@ -669,13 +669,16 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   }
 
   private releaseTree(node: Object3D): void {
-    const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
+    const r = this.renderer as (WebGLRenderer & { releaseGeometry?: (g: unknown) => void }) | null
     node.traverse((child) => {
       if (child === this.surfMesh || child === this.surfWireMesh) return // Never dispose persistent surface geometry
       const mesh = child as unknown as { geometry?: BufferGeometry; material?: { dispose?: () => void } }
       if (mesh.geometry) {
-        if (relGeo) relGeo(mesh.geometry)
-        else (mesh.geometry as any)?.dispose?.()
+        if (r && typeof r.releaseGeometry === 'function') {
+          r.releaseGeometry(mesh.geometry)
+        } else if ((mesh.geometry as any)?.dispose) {
+          (mesh.geometry as any).dispose()
+        }
       }
       if (mesh.material?.dispose) {
         mesh.material.dispose()
@@ -1159,9 +1162,12 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         this.surfWireMesh = null
       }
       if (this.surfMesh) {
-        const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
-        if (relGeo && this.surfMesh.geometry) relGeo(this.surfMesh.geometry)
-        else (this.surfMesh.geometry as any)?.dispose?.()
+        const r = this.renderer as (WebGLRenderer & { releaseGeometry?: (g: unknown) => void }) | null
+        if (r && typeof r.releaseGeometry === 'function' && this.surfMesh.geometry) {
+          r.releaseGeometry(this.surfMesh.geometry)
+        } else if ((this.surfMesh.geometry as any)?.dispose) {
+          (this.surfMesh.geometry as any).dispose()
+        }
         ;(this.surfMesh.material as any)?.dispose?.()
         this.surfMesh = null
       }
