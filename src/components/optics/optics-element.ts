@@ -679,8 +679,10 @@ export class ElementaOpticsElement extends HTMLElement {
     }
     ctx.textAlign = 'left'
 
-    // ---- screen coordinate range (sinθ ≤ 0.35 ⇒ y = L tanθ) ----
-    const sinMax = 0.35
+    // ---- screen coordinate range (adaptive to encompass central diffraction lobe & missing orders) ----
+    const zeroSinVal = envelopeZeroSin(p)
+    const targetSin = zeroSinVal != null ? Math.min(0.96, zeroSinVal * 1.05) : 0.35
+    const sinMax = Math.max(0.35, targetSin)
     const yMaxM = this.screenL * Math.tan(Math.asin(sinMax))
     const yMaxMm = yMaxM * 1000
 
