@@ -1,4 +1,6 @@
 {
+  "buildCommand": "echo prebuilt",
+  "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
