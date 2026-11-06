@@ -277,8 +277,8 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const camera = this.camera
     const overlay = this.overlay
 
-    // Narrow screens (<760px) fall back to 2D unless user chooses 3D
-    const isNarrow = w < 760
+    // Narrow mobile screens (<500px) fall back to 2D unless user chooses 3D
+    const isNarrow = w < 500
     const mode = isNarrow ? (this.viewMode === '3d' ? '3d' : '2d') : this.viewMode
 
     const pad = 10
@@ -287,9 +287,10 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
     if (mode === 'split') {
       const gap = 12
-      // 2D diagram gets ~49% of width (min 340px)
-      const leftW = Math.round(Math.min(Math.max((w - pad * 2 - gap) * 0.49, 340), (w - pad * 2 - gap) * 0.52))
-      const rightW = Math.max(100, w - pad * 2 - gap - leftW)
+      const avail = Math.max(200, w - pad * 2 - gap)
+      // 2D diagram gets ~49% of width (min 240px, ensuring right side gets >=160px)
+      const leftW = Math.round(Math.min(Math.max(avail * 0.49, 240), Math.max(100, avail - 160)))
+      const rightW = Math.max(100, avail - leftW)
 
       if (overlay) {
         overlay.style.display = 'block'
@@ -875,13 +876,20 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       : this.system === 'ho' ? 'Harmonic oscillator'
       : 'Rectangular barrier'
     const scale = evScale(this.lengthNm)
+    const isCompact = w < 480
+    const subtitle =
+      this.mode === 'eigen'
+        ? (isCompact ? `n = ${this.nState}` : `State n=${this.nState} (phase rotation)`)
+        : (isCompact ? 'Wave Packet' : 'Wave Packet Evolution (C–N)')
     ctx.fillStyle = '#e2e8f0'
     ctx.textAlign = 'left'
-    ctx.fillText(`${sysName} — ${this.mode === 'eigen' ? `State n=${this.nState} (illustrative phase rotation)` : 'Wave Packet Evolution (Crank–Nicolson)'}`, mL, 12)
+    ctx.fillText(`${sysName} · ${subtitle}`, mL, 12)
     ctx.textAlign = 'right'
     ctx.fillStyle = '#64748b'
     ctx.fillText(`L = ${this.lengthNm.toFixed(2)} nm`, w - mR, 12)
-    ctx.fillText(`ħ²/2mₑL² = ${scale.toFixed(3)} eV · natural units ħ = 2m = 1`, w - mR, 26)
+    if (!isCompact) {
+      ctx.fillText(`ħ²/2mₑL² = ${scale.toFixed(3)} eV · natural units ħ = 2m = 1`, w - mR, 26)
+    }
     ctx.textAlign = 'left'
 
     // baseline (V = 0 plane)
@@ -1073,29 +1081,43 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       const isBound = this.eigenBound[stateIdx] ?? true
       const res = this.eigenResiduals[stateIdx] ?? 0
 
-      lines.push(`ψ${this.nState}: E = ${e.toFixed(4)} nat = ${(e * scale).toFixed(3)} eV   [${isBound ? 'Bound' : 'Continuum / Box'}]`)
-      lines.push(`nodes ${this.psiNodes}   ⟨x⟩ = ${ob.meanX.toFixed(2)}   Δx = ${ob.dx.toFixed(3)}   ⟨p⟩ = ${ob.meanP.toFixed(4)}   Δp = ${ob.dp.toFixed(3)}`)
-      lines.push(`Δx·Δp/(ħ/2) = ${(ob.dxTimesDp / 0.5).toFixed(3)} (Heisenberg ≥ 1)   ||(H−E)ψ||₂ = ${res.toExponential(2)}`)
+      if (isCompact) {
+        lines.push(`ψ${this.nState}: E=${e.toFixed(3)} nat (${(e * scale).toFixed(3)} eV) [${isBound ? 'Bound' : 'Continuum'}]`)
+        lines.push(`nodes ${this.psiNodes} · Δx=${ob.dx.toFixed(2)} · Δp=${ob.dp.toFixed(2)}`)
+        lines.push(`ΔxΔp/(ħ/2)=${(ob.dxTimesDp / 0.5).toFixed(2)} · res=${res.toExponential(1)}`)
+      } else {
+        lines.push(`ψ${this.nState}: E = ${e.toFixed(4)} nat = ${(e * scale).toFixed(3)} eV   [${isBound ? 'Bound' : 'Continuum / Box'}]`)
+        lines.push(`nodes ${this.psiNodes}   ⟨x⟩ = ${ob.meanX.toFixed(2)}   Δx = ${ob.dx.toFixed(3)}   ⟨p⟩ = ${ob.meanP.toFixed(4)}   Δp = ${ob.dp.toFixed(3)}`)
+        lines.push(`Δx·Δp/(ħ/2) = ${(ob.dxTimesDp / 0.5).toFixed(3)} (Heisenberg ≥ 1)   ||(H−E)ψ||₂ = ${res.toExponential(2)}`)
+      }
     } else if (this.packet && this.obs) {
       const o = this.obs
-      lines.push(`t = ${this.simT.toFixed(2)}  ⟨E⟩ = ${o.energy.toFixed(3)} (${(o.energy * scale).toFixed(2)} eV)`)
-      const drift = Math.abs((o.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
-      const boundWarn = this.lastBoundaryProb > 0.005 ? `  ⚠️ boundary mass ${(this.lastBoundaryProb * 100).toFixed(2)}%` : ''
-      lines.push(`ΔE drift ${(drift * 100).toFixed(3)}%   pre-renorm norm err = ${this.lastNormError.toExponential(2)}${boundWarn}`)
-      lines.push(`⟨x⟩ = ${o.meanX.toFixed(2)}   Δx = ${o.dx.toFixed(2)}   ⟨p⟩ = ${o.meanP.toFixed(3)}   Δp = ${o.dp.toFixed(3)}   ΔxΔp/(ħ/2) = ${(o.dxTimesDp / 0.5).toFixed(2)}`)
-      if (this.system === 'barrier') {
-        const T = barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth)
-        lines.push(`transmitted ${this.obsRight.toFixed(3)}   inside ${this.obsInside.toFixed(4)}   reflected ${this.obsLeft.toFixed(3)}`)
-        lines.push(`T(E₀) analytic = ${T.toFixed(4)}   (spread shifts the measured fraction)`)
+      if (isCompact) {
+        lines.push(`t=${this.simT.toFixed(2)} · ⟨E⟩=${o.energy.toFixed(2)} (${(o.energy * scale).toFixed(2)} eV)`)
+        lines.push(`⟨x⟩=${o.meanX.toFixed(1)} · Δx=${o.dx.toFixed(2)} · ΔxΔp/(ħ/2)=${(o.dxTimesDp / 0.5).toFixed(2)}`)
+        if (this.system === 'barrier') {
+          lines.push(`trans ${this.obsRight.toFixed(2)} · ref ${this.obsLeft.toFixed(2)} · T=${barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth).toFixed(2)}`)
+        }
+      } else {
+        lines.push(`t = ${this.simT.toFixed(2)}  ⟨E⟩ = ${o.energy.toFixed(3)} (${(o.energy * scale).toFixed(2)} eV)`)
+        const drift = Math.abs((o.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
+        const boundWarn = this.lastBoundaryProb > 0.005 ? `  ⚠️ boundary mass ${(this.lastBoundaryProb * 100).toFixed(2)}%` : ''
+        lines.push(`ΔE drift ${(drift * 100).toFixed(3)}%   pre-renorm norm err = ${this.lastNormError.toExponential(2)}${boundWarn}`)
+        lines.push(`⟨x⟩ = ${o.meanX.toFixed(2)}   Δx = ${o.dx.toFixed(2)}   ⟨p⟩ = ${o.meanP.toFixed(3)}   Δp = ${o.dp.toFixed(3)}   ΔxΔp/(ħ/2) = ${(o.dxTimesDp / 0.5).toFixed(2)}`)
+        if (this.system === 'barrier') {
+          const T = barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth)
+          lines.push(`transmitted ${this.obsRight.toFixed(3)}   inside ${this.obsInside.toFixed(4)}   reflected ${this.obsLeft.toFixed(3)}`)
+          lines.push(`T(E₀) analytic = ${T.toFixed(4)}   (spread shifts the measured fraction)`)
+        }
       }
     }
 
     ctx.fillStyle = '#94a3b8'
-    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
-    let ly = h - mB - lines.length * 15 - 6
+    ctx.font = isCompact ? '9.5px ui-monospace, SFMono-Regular, Menlo, monospace' : '11px ui-monospace, SFMono-Regular, Menlo, monospace'
+    let ly = h - mB - lines.length * (isCompact ? 13 : 15) - 6
     for (const line of lines) {
       ctx.fillText(line, mL, ly)
-      ly += 15
+      ly += isCompact ? 13 : 15
     }
 
     // x ticks
