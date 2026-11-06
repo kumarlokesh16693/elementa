@@ -186,6 +186,15 @@ export default function BecPage(): VNode {
         H(
           'a',
           {
+            href: './statmech.html',
+            class:
+              'shrink-0 rounded-md border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-300 hover:bg-amber-400/20 transition',
+          },
+          'StatMech lab',
+        ),
+        H(
+          'a',
+          {
             href: './bands.html',
             class:
               'shrink-0 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 hover:bg-cyan-400/20 transition',

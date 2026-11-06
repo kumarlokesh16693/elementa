@@ -23,6 +23,7 @@ import {
   Scene,
   WebGLRenderer,
 } from '@nexus/3d'
+import { BloomPass, EffectComposer, RenderPass, VignettePass } from '@nexus/3d-post'
 import {
   barrierTransmission,
   boundaryProbability,
@@ -91,6 +92,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   private group: Object3D | null = null
   private overlay: HTMLCanvasElement | null = null
   private cameraReady = false
+  private composer: EffectComposer | null = null
 
   // surface geometry (persistent; updated per frame)
   private surfMesh: Mesh | null = null
@@ -143,6 +145,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   public lengthNm = 1
   public animating = true
   public viewMode: 'split' | '3d' | '2d' = 'split'
+  public fx = false
   private pillEl: HTMLDivElement | null = null
   private resetBtnEl: HTMLButtonElement | null = null
 
@@ -161,7 +164,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     return [
       'data-system', 'data-width', 'data-depth', 'data-barrier-width', 'data-kappa',
       'data-n', 'data-mode', 'data-speed', 'data-sigma', 'data-energy', 'data-length',
-      'data-anim', 'data-reset', 'data-view',
+      'data-anim', 'data-reset', 'data-view', 'data-fx',
     ]
   }
 
@@ -291,7 +294,8 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       this.lastTime = now
       this.advance(dt)
       if (this.controls) this.controls.update()
-      renderer.render(scene, camera)
+      if (this.composer) this.composer.render(dt)
+      else renderer.render(scene, camera)
     }
     this.lastTime = 0
     this.raf = requestAnimationFrame(tick)
@@ -343,6 +347,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         renderer.setSize(rightW, contentH, false)
         camera.aspect = rightW / contentH
         camera.updateProjectionMatrix()
+        if (this.composer) {
+          this.composer.setSize(renderer.domElement.width, renderer.domElement.height)
+        }
         if (this.controls) {
           this.controls.update()
         }
@@ -369,6 +376,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         renderer.setSize(fullW, contentH, false)
         camera.aspect = fullW / contentH
         camera.updateProjectionMatrix()
+        if (this.composer) {
+          this.composer.setSize(renderer.domElement.width, renderer.domElement.height)
+        }
         if (this.controls) {
           this.controls.update()
         }
@@ -443,6 +453,38 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     if (['split', '3d', '2d'].includes(vm) && this.viewMode !== vm) {
       this.viewMode = vm as 'split' | '3d' | '2d'
       this.updateLayout()
+    }
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
+  }
+
+  /** Lazily build (or release) the post-processing chain for the waterfall canvas. */
+  private syncComposer(): void {
+    const renderer = this.renderer
+    if (!renderer || !this.scene || !this.camera) return
+
+    if (this.fx && !this.composer) {
+      try {
+        const composer = new EffectComposer(renderer as never)
+        composer.setSize(renderer.domElement.width, renderer.domElement.height)
+        composer.addPass(new RenderPass(this.scene, this.camera))
+        // Subtle neon glow on the wavefunction crests; threshold sits above the
+        // dim base/wire colours so only the bright wavefront blooms.
+        const bloom = new BloomPass(0.35, 0.5)
+        composer.addPass(bloom)
+        // Gentle framing vignette; soft so the dark app background stays clean.
+        composer.addPass(new VignettePass(1.0, 0.55))
+        this.composer = composer
+      } catch {
+        this.composer = null
+        this.fx = false
+      }
+    } else if (!this.fx && this.composer) {
+      this.composer.dispose()
+      this.composer = null
     }
   }
 
@@ -526,6 +568,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
     // draw once now — rAF may be throttled (hidden tab) so the figure shouldn't
     // wait for the first animate frame
+    this.syncComposer()
     this.updateSurface(true)
     this.drawOverlay()
   }
@@ -1316,6 +1359,15 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
   private teardown(): void {
     cancelAnimationFrame(this.raf)
+    this.lastTime = 0
+    if (this.composer) {
+      try {
+        this.composer.dispose()
+      } catch {
+        /* context may already be lost */
+      }
+      this.composer = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

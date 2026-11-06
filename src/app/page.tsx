@@ -480,6 +480,7 @@ function HomePage(): VNode {
         actionButton('Quantum wave lab', './quantumwave.html', 'border-f472b6/40 bg-f472b6/10 text-f472b6'),
         actionButton('BEC lab', './bec.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
         actionButton('Particle lab', './particle.html', 'border-indigo-400/40 bg-indigo-400/10 text-indigo-300'),
+        actionButton('StatMech lab', './statmech.html', 'border-amber-400/40 bg-amber-400/10 text-amber-300'),
         actionButton('Optics lab', './optics.html', 'border-a3e635/40 bg-a3e635/10 text-a3e635'),
         actionButton('Band theory lab', './bands.html', 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'),
         actionButton('Segrè chart', './segre.html', 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'),

@@ -107,7 +107,7 @@ function getInitialParams(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const params = new URLSearchParams(window.location.search)
   const out: Record<string, string> = {}
-  for (const k of ['system', 'mode', 'n', 'width', 'depth', 'bw', 'kappa', 'sigma', 'energy', 'speed', 'L', 'animate', 'view']) {
+  for (const k of ['system', 'mode', 'n', 'width', 'depth', 'bw', 'kappa', 'sigma', 'energy', 'speed', 'L', 'animate', 'view', 'fx']) {
     const v = params.get(k)
     if (v != null) out[k] = v
   }
@@ -134,6 +134,7 @@ const state = reactive({
   speed: num(initial, 'speed', 1),
   lengthNm: num(initial, 'L', 1),
   animate: initial.animate !== 'false' && initial.animate !== '0',
+  fx: initial.fx === 'on',
   seed: 0,
 })
 
@@ -154,6 +155,7 @@ function syncUrl(): void {
   next.set('speed', String(state.speed))
   next.set('L', String(state.lengthNm))
   next.set('animate', String(state.animate))
+  next.set('fx', state.fx ? 'on' : 'off')
   const url = `${window.location.pathname}?${next}`
   if (url !== lastUrl) {
     lastUrl = url
@@ -270,6 +272,7 @@ export default function QuantumWavePage(): VNode {
     'data-anim': state.animate ? 'true' : 'false',
     'data-reset': String(state.seed),
     'data-view': state.view,
+    'data-fx': state.fx ? 'on' : 'off',
   }
 
   return Htag(
@@ -358,6 +361,7 @@ export default function QuantumWavePage(): VNode {
           toggle('Animate', state.animate, () => { state.animate = !state.animate; syncUrl() }),
           toggle('Eigenstates', mode === 'eigen', () => setMode('eigen')),
           toggle('Packet', mode === 'packet', () => setMode('packet')),
+          toggle('✨ Glow FX', state.fx, () => { state.fx = !state.fx; syncUrl() }),
           Htag('div', { class: 'h-4 w-[1px] bg-white/10 mx-1' }),
           toggle('◨ Split', state.view === 'split', () => { state.view = 'split'; syncUrl() }),
           toggle('🌊 3D Waterfall', state.view === '3d', () => { state.view = '3d'; syncUrl() }),

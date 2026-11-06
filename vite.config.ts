@@ -93,6 +93,11 @@ export default defineConfig({
         __dirname,
         '../../packages/3D/nexus/nexus-3d/src/index.ts',
       ),
+      // @nexus/3d-post — post-processing chain (bloom/vignette/FXAA/SSAO…)
+      '@nexus/3d-post': path.resolve(
+        __dirname,
+        '../../packages/3D/nexus/nexus-3d-post/src/index.ts',
+      ),
       // React 19 JSX works through Vite's esbuild transform (tsconfig jsx:
       // react-jsx) — no @vitejs/plugin-react needed. Trade-off: no fast
       // refresh (full reload on edit), which the house apps also accept.
@@ -124,6 +129,7 @@ export default defineConfig({
         integrity: path.resolve(__dirname, 'integrity.html'),
         bec: path.resolve(__dirname, 'bec.html'),
         particle: path.resolve(__dirname, 'particle.html'),
+        statmech: path.resolve(__dirname, 'statmech.html'),
       },
     },
   },

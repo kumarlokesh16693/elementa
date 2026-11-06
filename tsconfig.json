@@ -18,7 +18,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "nexus-framework": ["../../index.d.ts"],
-      "@nexus/3d": ["../../packages/3D/nexus/nexus-3d/src/index.ts"]
+      "@nexus/3d": ["../../packages/3D/nexus/nexus-3d/src/index.ts"],
+      "@nexus/3d-post": ["../../packages/3D/nexus/nexus-3d-post/src/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]
