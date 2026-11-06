@@ -102,6 +102,24 @@ export function envelopeZeroSin(p: SlitParams): number | null {
 }
 
 /**
+ * Missing orders (systematic absences): interference maxima m that coincide with
+ * envelope diffraction zeros p (m/d = p/a => m = p * d/a).
+ */
+export function missingOrders(p: SlitParams, cap = 12): number[] {
+  if (p.nSlits <= 1 || p.aUm <= 0) return []
+  const ratio = p.dUm / p.aUm
+  const maxM = Math.min(cap, Math.floor((p.dUm * 1000) / Math.max(1e-9, p.lambdaNm)))
+  const missing: number[] = []
+  for (let pIdx = 1; pIdx <= 10; pIdx++) {
+    const m = Math.round(pIdx * ratio)
+    if (Math.abs(m - pIdx * ratio) < 1e-4 && m > 0 && m <= maxM) {
+      if (!missing.includes(m)) missing.push(m)
+    }
+  }
+  return missing
+}
+
+/**
  * Resolving power of the grating at order m: R = mN (Rayleigh criterion), and
  * the smallest resolvable wavelength step Δλ = λ / (mN).
  */

@@ -30,6 +30,7 @@ import {
   firstOrderSin,
   fringeSpacingM,
   intensityAtScreen,
+  missingOrders,
   resolvingPower,
   rayleighDeltaLambdaNm,
   spectralName,
@@ -82,7 +83,9 @@ export class ElementaOpticsElement extends HTMLElement {
   public screenL = 1.5
   public speed = 1
   public animating = true
+  public viewMode: 'split' | '3d' | '2d' = 'split'
 
+  private pillEl: HTMLElement | null = null
   private fieldT = 0
   private lastTime = 0
   private lastSeed: string | null = null
@@ -91,7 +94,7 @@ export class ElementaOpticsElement extends HTMLElement {
   static get observedAttributes(): string[] {
     return [
       'data-system', 'data-lambda', 'data-a', 'data-d', 'data-n',
-      'data-l', 'data-speed', 'data-anim', 'data-reset',
+      'data-l', 'data-speed', 'data-anim', 'data-reset', 'data-view',
     ]
   }
 
@@ -99,6 +102,7 @@ export class ElementaOpticsElement extends HTMLElement {
     if (this.ready) return
     this.initScene()
     this.readAttributes()
+    this.updateLayout()
     this.rebuild(true)
   }
 
@@ -109,6 +113,7 @@ export class ElementaOpticsElement extends HTMLElement {
   attributeChangedCallback(): void {
     if (!this.ready) return
     this.readAttributes()
+    this.updateLayout()
     this.rebuild(false)
   }
 
@@ -127,12 +132,9 @@ export class ElementaOpticsElement extends HTMLElement {
     overlay.style.top = '10px'
     overlay.style.left = '10px'
     overlay.style.bottom = '10px'
-    overlay.style.width = '55%'
-    overlay.style.height = 'calc(100% - 20px)'
-    overlay.style.pointerEvents = 'none'
     overlay.style.borderRadius = '12px'
     overlay.style.border = '1px solid rgba(255,255,255,0.10)'
-    overlay.style.background = 'rgba(8,12,20,0.88)'
+    overlay.style.background = '#080c14'
     overlay.style.zIndex = '2'
     this.appendChild(overlay)
     this.overlay = overlay
@@ -144,10 +146,8 @@ export class ElementaOpticsElement extends HTMLElement {
     try {
       renderer = new WebGLRenderer({ antialias: true, alpha: true })
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+      renderer.setClearColor('#080c14', 1.0)
       renderer.domElement.style.position = 'absolute'
-      renderer.domElement.style.inset = '0'
-      renderer.domElement.style.width = '100%'
-      renderer.domElement.style.height = '100%'
       renderer.domElement.style.touchAction = 'none'
       this.appendChild(renderer.domElement)
       this.renderer = renderer
@@ -186,23 +186,39 @@ export class ElementaOpticsElement extends HTMLElement {
       this.noteEl = note
     }
 
-    const resize = () => {
-      const w = this.clientWidth || 1
-      const h = this.clientHeight || 1
-      if (renderer && camera) {
-        renderer.setSize(w, h, false)
-        camera.aspect = w / h
-        camera.updateProjectionMatrix()
-        // Frame the whole tank from any aspect ratio (phones included).
-        if (this.controls) {
-          const fit = Math.min(2.4, Math.max(1, 1.5 / camera.aspect))
-          this.controls.setDistance(14 * fit)
-        }
+    // Floating view mode pills in the top-right
+    const pill = document.createElement('div')
+    pill.style.cssText =
+      'position:absolute;top:18px;right:18px;z-index:10;display:flex;gap:3px;' +
+      'background:rgba(8,12,20,0.88);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);' +
+      'border-radius:8px;padding:3px;box-shadow:0 4px 16px rgba(0,0,0,0.45);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;'
+
+    const modes: { label: string; mode: 'split' | '3d' | '2d' }[] = [
+      { label: '◨ Split', mode: 'split' },
+      { label: '🌊 3D Tank', mode: '3d' },
+      { label: '📊 2D Screen', mode: '2d' },
+    ]
+    for (const m of modes) {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.textContent = m.label
+      btn.dataset.mode = m.mode
+      btn.style.cssText =
+        'padding:3px 8px;font-size:10px;border-radius:5px;border:none;' +
+        'cursor:pointer;transition:all 0.15s ease;font-family:inherit;'
+      btn.onclick = () => {
+        this.viewMode = m.mode
+        this.updateLayout()
+        this.dispatchEvent(new CustomEvent('viewchange', { detail: { view: m.mode }, bubbles: true }))
       }
-      this.drawOverlay()
+      pill.appendChild(btn)
     }
-    resize()
-    this.ro = new ResizeObserver(resize)
+    this.appendChild(pill)
+    this.pillEl = pill
+
+    this.ro = new ResizeObserver(() => {
+      this.updateLayout()
+    })
     this.ro.observe(this)
 
     if (renderer && scene && camera) {
@@ -222,6 +238,119 @@ export class ElementaOpticsElement extends HTMLElement {
     }
 
     this.ready = true
+  }
+
+  private updateLayout(): void {
+    const w = this.clientWidth || 1
+    const h = this.clientHeight || 1
+    const renderer = this.renderer
+    const camera = this.camera
+    const overlay = this.overlay
+
+    // Small screens (<740px) default to 2D view unless user explicitly chooses 3D
+    const isNarrow = w < 740
+    const mode = isNarrow ? (this.viewMode === '3d' ? '3d' : '2d') : this.viewMode
+
+    const pad = 10
+    const padY = 10
+    const contentH = Math.max(100, h - padY * 2)
+
+    if (mode === 'split') {
+      const gap = 12
+      // 2D diagram gets ~49% of available space (min 360px, max 50%)
+      const leftW = Math.round(Math.min(Math.max((w - pad * 2 - gap) * 0.49, 360), (w - pad * 2 - gap) * 0.51))
+      const rightW = Math.max(100, w - pad * 2 - gap - leftW)
+
+      if (overlay) {
+        overlay.style.display = 'block'
+        overlay.style.left = `${pad}px`
+        overlay.style.top = `${padY}px`
+        overlay.style.width = `${leftW}px`
+        overlay.style.height = `${contentH}px`
+      }
+
+      if (renderer && camera) {
+        const dom = renderer.domElement
+        dom.style.display = 'block'
+        dom.style.left = `${pad + leftW + gap}px`
+        dom.style.top = `${padY}px`
+        dom.style.width = `${rightW}px`
+        dom.style.height = `${contentH}px`
+        dom.style.borderRadius = '12px'
+        dom.style.border = '1px solid rgba(255,255,255,0.10)'
+        dom.style.background = '#080c14'
+
+        renderer.setSize(rightW, contentH, false)
+        camera.aspect = rightW / contentH
+        camera.updateProjectionMatrix()
+        camera.position.set(0, 8.6, 10.4)
+        if (this.controls) {
+          this.controls.target.set(0, 0, -0.6)
+          const fit = Math.min(2.4, Math.max(1, 1.4 / camera.aspect))
+          this.controls.setDistance(14 * fit)
+          this.controls.update()
+        }
+      }
+    } else if (mode === '3d') {
+      const fullW = Math.max(100, w - pad * 2)
+
+      if (overlay) {
+        overlay.style.display = 'none'
+      }
+
+      if (renderer && camera) {
+        const dom = renderer.domElement
+        dom.style.display = 'block'
+        dom.style.left = `${pad}px`
+        dom.style.top = `${padY}px`
+        dom.style.width = `${fullW}px`
+        dom.style.height = `${contentH}px`
+        dom.style.borderRadius = '12px'
+        dom.style.border = '1px solid rgba(255,255,255,0.10)'
+        dom.style.background = '#080c14'
+
+        renderer.setSize(fullW, contentH, false)
+        camera.aspect = fullW / contentH
+        camera.updateProjectionMatrix()
+        camera.position.set(0, 8.6, 10.4)
+        if (this.controls) {
+          this.controls.target.set(0, 0, -0.6)
+          const fit = Math.min(2.4, Math.max(1, 1.4 / camera.aspect))
+          this.controls.setDistance(14 * fit)
+          this.controls.update()
+        }
+      }
+    } else {
+      // 2D diagram takes entire area
+      const fullW = Math.max(100, w - pad * 2)
+
+      if (overlay) {
+        overlay.style.display = 'block'
+        overlay.style.left = `${pad}px`
+        overlay.style.top = `${padY}px`
+        overlay.style.width = `${fullW}px`
+        overlay.style.height = `${contentH}px`
+      }
+
+      if (renderer) {
+        renderer.domElement.style.display = 'none'
+      }
+    }
+
+    this.updatePillUI(mode)
+    this.drawOverlay()
+  }
+
+  private updatePillUI(activeMode: 'split' | '3d' | '2d'): void {
+    if (!this.pillEl) return
+    const btns = this.pillEl.querySelectorAll('button')
+    btns.forEach((btn) => {
+      const isAct = btn.dataset.mode === activeMode
+      btn.style.background = isAct ? 'rgba(163,230,53,0.22)' : 'transparent'
+      btn.style.color = isAct ? '#bef264' : '#94a3b8'
+      btn.style.border = isAct ? '1px solid rgba(163,230,53,0.45)' : '1px solid transparent'
+      btn.style.fontWeight = isAct ? '600' : '400'
+    })
   }
 
   /* ------------------------------------------------------------------ */
@@ -252,6 +381,10 @@ export class ElementaOpticsElement extends HTMLElement {
     if (a != null) {
       const t = a.trim().toLowerCase()
       this.animating = t !== 'false' && t !== '0'
+    }
+    const vm = this.getAttribute('data-view')
+    if (vm === 'split' || vm === '3d' || vm === '2d') {
+      this.viewMode = vm
     }
   }
 
@@ -719,19 +852,21 @@ export class ElementaOpticsElement extends HTMLElement {
           ]
         : [line1, 'I(θ) = sinc²(πa sinθ/λ)  ·  envelope zeros at a sinθ = pλ'])
     } else {
+      const miss = missingOrders(p)
       ctx.textAlign = 'center'
       for (const m of orders) {
         const sin = (m * this.lambdaNm) / (p.dUm * 1000)
         if (Math.abs(sin) > sinMax) continue
         const yMm = this.screenL * Math.tan(Math.asin(sin)) * 1000
         const px = xPx(yMm)
-        ctx.strokeStyle = m === 0 ? col : 'rgba(148,163,184,0.5)'
+        const isMiss = miss.includes(Math.abs(m))
+        ctx.strokeStyle = isMiss ? '#f59e0b' : m === 0 ? col : 'rgba(148,163,184,0.5)'
         ctx.beginPath()
         ctx.moveTo(px, rulerY - 4)
         ctx.lineTo(px, rulerY + 4)
         ctx.stroke()
-        ctx.fillStyle = m === 0 ? col : '#94a3b8'
-        ctx.fillText(m === 0 ? '0' : `m=${m > 0 ? '+' : ''}${m}`, px, rulerY + 14)
+        ctx.fillStyle = isMiss ? '#f59e0b' : m === 0 ? col : '#94a3b8'
+        ctx.fillText(m === 0 ? '0' : `m=${m > 0 ? '+' : ''}${m}${isMiss ? '∅' : ''}`, px, rulerY + 14)
       }
 
       // ---- readouts ----
@@ -749,15 +884,16 @@ export class ElementaOpticsElement extends HTMLElement {
       const env = thetaZero != null ? `envelope zero ${thetaZero.toFixed(2)}°` : 'envelope: no zero'
       const res = `R = N = ${R} @ m=1`
       const dl = Number.isFinite(dLam) ? `Δλ_R = ${dLam.toFixed(2)} nm` : ''
+      const missTxt = miss.length > 0 ? `missing: m=±${miss.join(', ±')} (d/a=${(p.dUm / p.aUm).toFixed(1)})` : ''
 
       drawStats(narrow
         ? [
             `${dy}  ·  ${th1}`,
             ord,
             [env, res].filter(Boolean).join('  ·  '),
-            dl,
+            [dl, missTxt].filter(Boolean).join('  ·  '),
           ].filter(Boolean)
-        : [`${dy}  ·  ${th1}  ·  ${ord}`, [env, res, dl].filter(Boolean).join('  ·  ')])
+        : [`${dy}  ·  ${th1}  ·  ${ord}`, [env, res, dl, missTxt].filter(Boolean).join('  ·  ')])
     }
   }
 
@@ -796,6 +932,10 @@ export class ElementaOpticsElement extends HTMLElement {
     if (this.overlay && this.overlay.parentElement === this) {
       this.removeChild(this.overlay)
       this.overlay = null
+    }
+    if (this.pillEl && this.pillEl.parentElement === this) {
+      this.removeChild(this.pillEl)
+      this.pillEl = null
     }
     if (this.noteEl) {
       if (this.noteEl.parentElement === this) this.removeChild(this.noteEl)

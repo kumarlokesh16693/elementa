@@ -115,30 +115,36 @@ export function ReactionCoordinateCanvas({
 
       // Multi-step catalytic pathway with two mini-peaks and intermediate well
       const cPeak1 = effectiveEaCat
-      const cInter = effectiveEaCat * 0.45 + deltaH * 0.2
-      const cPeak2 = effectiveEaCat * 0.9
+      const cInter = cPeak1 * 0.25 + deltaH * 0.18
+      const cPeak2 = Math.max(cInter + 5, cPeak1 * 0.75 + deltaH * 0.08)
 
       ctx.moveTo(p0x, p0y)
-      ctx.lineTo(p1x, p1y)
-      // Step 1: Adsorption / Complexation
-      ctx.bezierCurveTo(xToCoord(0.28), p0y, xToCoord(0.30), eToY(cPeak1), xToCoord(0.38), eToY(cPeak1))
+      ctx.lineTo(p1x, p0y)
+      // Step 1: Substrate binding / Complexation
+      ctx.bezierCurveTo(xToCoord(0.26), p0y, xToCoord(0.28), eToY(cPeak1), xToCoord(0.35), eToY(cPeak1))
       // Intermediate well
-      ctx.bezierCurveTo(xToCoord(0.44), eToY(cPeak1), xToCoord(0.46), eToY(cInter), xToCoord(0.52), eToY(cInter))
-      // Step 2: Surface reaction / Cleavage
-      ctx.bezierCurveTo(xToCoord(0.58), eToY(cInter), xToCoord(0.62), eToY(cPeak2), xToCoord(0.68), eToY(cPeak2))
-      // Desorption to products
-      ctx.bezierCurveTo(xToCoord(0.74), eToY(cPeak2), xToCoord(0.76), p3y, p3x, p3y)
+      ctx.bezierCurveTo(xToCoord(0.40), eToY(cPeak1), xToCoord(0.42), eToY(cInter), xToCoord(0.48), eToY(cInter))
+      // Step 2: Transition state 2 / Cleavage
+      ctx.bezierCurveTo(xToCoord(0.54), eToY(cInter), xToCoord(0.56), eToY(cPeak2), xToCoord(0.62), eToY(cPeak2))
+      // Desorption to products (smooth sigmoid transition)
+      ctx.bezierCurveTo(xToCoord(0.68), eToY(cPeak2), xToCoord(0.72), p3y, p3x, p3y)
       ctx.lineTo(p4x, p4y)
       ctx.stroke()
 
-      // Catalytic TS marker
+      // Catalytic TS1 marker
       ctx.fillStyle = '#10b981'
       ctx.beginPath()
-      ctx.arc(xToCoord(0.38), eToY(cPeak1), 4.5, 0, Math.PI * 2)
+      ctx.arc(xToCoord(0.35), eToY(cPeak1), 4.5, 0, Math.PI * 2)
       ctx.fill()
       ctx.font = 'bold 10px monospace'
       ctx.textAlign = 'center'
-      ctx.fillText(`[Cat-TS₁]‡ (${effectiveEaCat.toFixed(1)} kJ)`, xToCoord(0.38), eToY(cPeak1) - 10)
+      ctx.fillText(`[Cat-TS₁]‡ (${effectiveEaCat.toFixed(1)} kJ)`, xToCoord(0.35), eToY(cPeak1) - 10)
+
+      // Catalytic TS2 marker
+      ctx.beginPath()
+      ctx.arc(xToCoord(0.62), eToY(cPeak2), 4, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillText(`[Cat-TS₂]‡ (${cPeak2.toFixed(1)} kJ)`, xToCoord(0.62), eToY(cPeak2) - 10)
     }
 
     // Uncatalyzed TS marker

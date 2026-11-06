@@ -13,6 +13,7 @@ import {
   envelopeZeroSin,
   firstOrderSin,
   fringeSpacingM,
+  missingOrders,
   rayleighDeltaLambdaNm,
   resolvingPower,
   spectralName,
@@ -102,7 +103,7 @@ function getInitialParams(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const params = new URLSearchParams(window.location.search)
   const out: Record<string, string> = {}
-  for (const k of ['system', 'lambda', 'a', 'd', 'n', 'L', 'speed', 'animate']) {
+  for (const k of ['system', 'lambda', 'a', 'd', 'n', 'L', 'speed', 'animate', 'view']) {
     const v = params.get(k)
     if (v != null) out[k] = v
   }
@@ -124,6 +125,7 @@ const state = reactive({
   screenL: Math.min(4, Math.max(0.2, num(initial, 'L', 1.5))),
   speed: Math.min(3, Math.max(0, num(initial, 'speed', 1))),
   animate: initial.animate !== 'false' && initial.animate !== '0',
+  viewMode: (['split', '3d', '2d'].includes(initial.view ?? '') ? initial.view : 'split') as 'split' | '3d' | '2d',
   seed: 0,
 })
 
@@ -143,6 +145,7 @@ function syncUrl(): void {
   next.set('L', String(state.screenL))
   next.set('speed', String(state.speed))
   next.set('animate', String(state.animate))
+  next.set('view', state.viewMode)
   const url = `${window.location.pathname}?${next}`
   if (url !== lastUrl) {
     lastUrl = url
@@ -194,6 +197,7 @@ export default function OpticsPage(): VNode {
   const minimaP = zeroSin != null ? Math.min(6, Math.floor(aOverLambda)) : 0
   const swatch = wavelengthCss(state.lambdaNm, 1)
   const swatchSoft = wavelengthCss(state.lambdaNm, 0.18)
+  const missOrders = missingOrders(p)
 
   const attrs: Record<string, string> = {
     'data-system': state.system,
@@ -204,6 +208,7 @@ export default function OpticsPage(): VNode {
     'data-l': String(state.screenL),
     'data-speed': String(state.speed),
     'data-anim': state.animate ? 'true' : 'false',
+    'data-view': state.viewMode,
     'data-reset': String(state.seed),
   }
 
@@ -261,13 +266,19 @@ export default function OpticsPage(): VNode {
           { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-2 flex-1 relative' },
           Htag('elementa-optics', {
             ...attrs,
+            onviewchange: (e: any) => {
+              if (e.detail?.view) {
+                state.viewMode = e.detail.view
+                syncUrl()
+              }
+            },
             style: 'width: 100%; height: 100%; display: block;',
           }),
           Htag(
             'div',
             {
               class:
-                'pointer-events-none absolute bottom-2 right-2 flex flex-wrap items-center gap-2 font-mono text-[9.5px] text-zinc-500',
+                'pointer-events-none absolute bottom-3 right-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-white/10 bg-[#080c14]/85 px-2.5 py-1 backdrop-blur font-mono text-[9.5px] text-zinc-400 shadow-md',
             },
             Htag('span', { class: 'flex items-center gap-1' },
               Htag('span', {
@@ -295,6 +306,19 @@ export default function OpticsPage(): VNode {
               class: 'rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 transition hover:border-white/25 hover:text-zinc-200',
             },
             '⟲ Reset wave phase',
+          ),
+          Htag('div', { class: 'flex items-center gap-1 rounded-md border border-white/10 bg-white/5 p-0.5' },
+            (['split', '3d', '2d'] as const).map((m) =>
+              Htag('button', {
+                type: 'button',
+                onclick: () => { state.viewMode = m; syncUrl() },
+                class: `rounded px-2 py-0.5 text-[10px] font-mono transition ${
+                  state.viewMode === m
+                    ? 'bg-lime-400/20 text-lime-300 font-bold border border-lime-400/40'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`,
+              }, m === 'split' ? '◨ Split' : m === '3d' ? '🌊 3D Tank' : '📊 2D Screen')
+            )
           ),
           Htag(
             'span',
@@ -384,9 +408,9 @@ export default function OpticsPage(): VNode {
                   StatCard({ label: 'Δy on screen', value: `${spacingMm.toFixed(2)} mm`, tint: '#bef264' }),
                   StatCard({ label: 'first order θ₁', value: theta1 != null ? `${theta1.toFixed(2)}°` : '—', tint: '#e4e4e7' }),
                   StatCard({ label: 'orders', value: `±${mMax}`, tint: '#e4e4e7' }),
+                  StatCard({ label: 'missing orders', value: missOrders.length ? `m=±${missOrders.join(',±')}` : 'none', tint: missOrders.length ? '#f59e0b' : '#a1a1aa' }),
                   StatCard({ label: 'first zero θ₀', value: thetaZero != null ? `${thetaZero.toFixed(2)}°` : 'none', tint: '#a1a1aa' }),
                   StatCard({ label: 'd / λ', value: fmt(ratio, 2), tint: '#e4e4e7' }),
-                  StatCard({ label: 'slits N', value: String(nSlits), tint: '#e4e4e7' }),
                 ],
           ),
           Htag(
