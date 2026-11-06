@@ -71,6 +71,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
   // surface geometry (persistent; updated per frame)
   private surfMesh: Mesh | null = null
+  private surfWireMesh: Mesh | null = null
   private ribbonMesh: Mesh | null = null
   private surfPos: Float32Array = new Float32Array(ROWS * COLS * 3)
   private surfCol: Float32Array = new Float32Array(ROWS * COLS * 3)
@@ -179,7 +180,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     this.renderer = renderer
 
     const scene = new Scene()
-    const camera = new PerspectiveCamera(45, 1, 0.05, 400)
+    const camera = new PerspectiveCamera(45, 1, 0.5, 400)
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
@@ -539,6 +540,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       if (this.surfMesh && this.surfMesh.parent === this.group) {
         this.group.remove(this.surfMesh)
       }
+      if (this.surfWireMesh && this.surfWireMesh.parent === this.group) {
+        this.group.remove(this.surfWireMesh)
+      }
       scene.remove(this.group)
       this.releaseTree(this.group)
       this.group = null
@@ -550,11 +554,11 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     this.group = group
 
     // Subtle coordinate orientation grid on the baseline
-    const gridHelper = new GridHelper(16, 16, '#38bdf8', '#1e293b')
-    gridHelper.position.set(0, -0.02, 0)
+    const gridHelper = new GridHelper(16, 16, '#38bdf8', '#334155')
+    gridHelper.position.set(0, -0.01, 0)
     if (gridHelper.material) {
       gridHelper.material.transparent = true
-      gridHelper.material.opacity = 0.4
+      gridHelper.material.opacity = 0.5
     }
     gridHelper.frustumCulled = false
     group.add(gridHelper)
@@ -568,10 +572,10 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       for (let r = 0; r < ROWS - 1; r++) {
         for (let c = 0; c < COLS - 1; c++) {
           const a = r * COLS + c
-          idx.push(a, a + COLS, a + 1, a + 1, a + COLS, a + COLS + 1)
+          idx.push(a, a + 1, a + COLS, a + 1, a + COLS + 1, a + COLS)
         }
       }
-      geo.setIndex(idx)
+      geo.setIndex(new Uint16Array(idx))
       const mat = new MeshBasicMaterial()
       mat.side = 'double'
       this.surfMesh = new Mesh(geo, mat)
@@ -580,6 +584,21 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     surf.frustumCulled = false
     surf.position.set(0, 0, 0)
     group.add(surf)
+
+    // Subtle neon wireframe grid overlay for instant 3D topology & depth
+    if (!this.surfWireMesh) {
+      const wireMat = new MeshBasicMaterial({
+        color: '#38bdf8',
+        wireframe: true,
+        transparent: true,
+        opacity: 0.22,
+      })
+      wireMat.side = 'double'
+      this.surfWireMesh = new Mesh(this.surfMesh.geometry, wireMat)
+      this.surfWireMesh.frustumCulled = false
+    }
+    this.surfWireMesh.position.set(0, 0, 0)
+    group.add(this.surfWireMesh)
 
     // --- Potential ribbon at the back ---
     this.updateRibbon()
@@ -640,7 +659,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
     }
     geo.setAttribute('position', { array: pos, itemSize: 3 })
-    geo.setIndex(idx)
+    geo.setIndex(new Uint16Array(idx))
     const mat = new MeshBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.85 })
     mat.side = 'double'
     this.ribbonMesh = new Mesh(geo, mat)
@@ -651,7 +670,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   private releaseTree(node: Object3D): void {
     const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
     node.traverse((child) => {
-      if (child === this.surfMesh) return // Never dispose persistent surface geometry
+      if (child === this.surfMesh || child === this.surfWireMesh) return // Never dispose persistent surface geometry
       const mesh = child as unknown as { geometry?: BufferGeometry; material?: { dispose?: () => void } }
       if (mesh.geometry) {
         if (relGeo) relGeo(mesh.geometry)
@@ -1106,9 +1125,16 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         if (this.surfMesh && this.surfMesh.parent === this.group) {
           this.group.remove(this.surfMesh)
         }
+        if (this.surfWireMesh && this.surfWireMesh.parent === this.group) {
+          this.group.remove(this.surfWireMesh)
+        }
         this.scene?.remove(this.group)
         this.releaseTree(this.group)
         this.group = null
+      }
+      if (this.surfWireMesh) {
+        ;(this.surfWireMesh.material as any)?.dispose?.()
+        this.surfWireMesh = null
       }
       if (this.surfMesh) {
         const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry

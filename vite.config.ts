@@ -100,6 +100,7 @@ export default defineConfig({
     extensions: ['.ts', '.tsx', '.mjs', '.js', '.jsx', '.json'],
   },
   build: {
+    sourcemap: false,
     rollupOptions: {
       input: {
         index: path.resolve(__dirname, 'index.html'),
