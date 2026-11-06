@@ -114,18 +114,55 @@ export function eigenvalues(grid: Grid, count: number): number[] {
   return out
 }
 
-/** Eigenvalues plus eigenvectors (levels 1..count). */
+/** Check whether an eigenvalue corresponds to a physically bound state or a box continuum state. */
+export function isStateBound(energy: number, grid: Grid, system: SystemKey): boolean {
+  if (!Number.isFinite(energy)) return false
+  if (system === 'well' || system === 'ho') return true
+  if (system === 'barrier') return false
+  const vInf = Math.min(grid.v[0], grid.v[grid.n - 1])
+  return energy < vInf - 1e-9
+}
+
+/** Compute numerical 2-norm residual ||(H - lambda*I) psi||_2 on the interior grid. */
+export function eigenResidual(grid: Grid, lambda: number, psi: Float64Array): number {
+  const n = grid.n
+  const h = grid.h
+  const invH2 = 1 / (h * h)
+  let sumSq = 0
+  for (let i = 1; i < n - 1; i++) {
+    const d2psi = (psi[i + 1] - 2 * psi[i] + psi[i - 1]) * invH2
+    const Hpsi = -d2psi + grid.v[i] * psi[i]
+    const diff = Hpsi - lambda * psi[i]
+    sumSq += diff * diff
+  }
+  return Math.sqrt(sumSq * h)
+}
+
+export type EigenPairsResult = {
+  energies: number[]
+  vectors: Float64Array[]
+  bound: boolean[]
+  residuals: number[]
+}
+
+/** Eigenvalues plus eigenvectors (levels 1..count) with bound-state classification and residuals. */
 export function eigenPairs(
   grid: Grid,
   count: number,
-): { energies: number[]; vectors: Float64Array[] } {
+  system: SystemKey = 'well',
+): EigenPairsResult {
   const energies = eigenvalues(grid, count)
   const vectors: Float64Array[] = []
+  const bound: boolean[] = []
+  const residuals: number[] = []
   for (let k = 0; k < energies.length; k++) {
     const e = energies[k]
-    vectors.push(Number.isFinite(e) ? eigenvector(grid, e) : new Float64Array(grid.n))
+    const vec = Number.isFinite(e) ? eigenvector(grid, e) : new Float64Array(grid.n)
+    vectors.push(vec)
+    bound.push(isStateBound(e, grid, system))
+    residuals.push(Number.isFinite(e) ? eigenResidual(grid, e, vec) : 0)
   }
-  return { energies, vectors }
+  return { energies, vectors, bound, residuals }
 }
 
 /** One inverse-iteration pass: eigenvector of the interior Dirichlet system. */
@@ -389,6 +426,28 @@ export function evolvePacket(packet: Packet, grid: Grid, dt: number, s: CnScratc
   packet.im[0] = 0
   packet.re[n - 1] = 0
   packet.im[n - 1] = 0
+}
+
+/** Calculate discrete probability integral P = h * sum(|psi|^2) without modifying the packet. */
+export function discreteNorm(packet: Packet, h: number): number {
+  let s = 0
+  const n = packet.re.length
+  for (let i = 0; i < n; i++) s += packet.re[i] * packet.re[i] + packet.im[i] * packet.im[i]
+  return s * h
+}
+
+/** Probability mass in outer fraction (default 5% on each edge) of the domain. */
+export function boundaryProbability(packet: Packet, h: number, fraction = 0.05): number {
+  const n = packet.re.length
+  const edgeCount = Math.max(1, Math.floor(n * fraction))
+  let s = 0
+  for (let i = 0; i < edgeCount; i++) {
+    s += packet.re[i] * packet.re[i] + packet.im[i] * packet.im[i]
+  }
+  for (let i = n - edgeCount; i < n; i++) {
+    s += packet.re[i] * packet.re[i] + packet.im[i] * packet.im[i]
+  }
+  return s * h
 }
 
 /** Renormalise a packet to Σ|ψ|²h = 1 (residual = true CN unitarity error). */

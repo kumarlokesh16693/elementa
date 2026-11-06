@@ -24,12 +24,16 @@ import {
 } from '@nexus/3d'
 import {
   barrierTransmission,
+  boundaryProbability,
   buildGrid,
   cnScratch,
   countNodes,
+  discreteNorm,
   eigenPairs,
+  eigenResidual,
   evolvePacket,
   evScale,
+  isStateBound,
   makePacket,
   observables,
   regionProbs,
@@ -72,19 +76,29 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   private hist = new Float32Array(ROWS * COLS)
   private histMax = 0
 
+  // Pre-allocated performance buffers (avoids GC churn per frame)
+  private zeroBuffer = new Float64Array(N_GRID)
+  private rhoBuffer = new Float64Array(COLS)
+
   // solver state
   private grid: Grid | null = null
   private packet: Packet | null = null
   private scratch: ReturnType<typeof cnScratch> | null = null
   private eigenE: number[] = []
+  private eigenBound: boolean[] = []
+  private eigenResiduals: number[] = []
+  private psiVectors: Float64Array[] | null = null
   private psi: Float64Array | null = null
   private psiNodes = 0
+  private cachedEigenObs: Observables | null = null
 
-  // last packet observables
+  // last packet observables & numerical diagnostics
   private obs: Observables | null = null
   private obsLeft = 0
   private obsInside = 0
   private obsRight = 0
+  private lastNormError = 0
+  private lastBoundaryProb = 0
 
   // public state (page-driven)
   public system: SystemKey = 'well'
@@ -102,8 +116,12 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
   private phaseT = 0
   private simT = 0
+  private simAccumulator = 0
   private lastSeed: string | null = null
   private lastGeoSig = ''
+  private lastPacketSig = ''
+  private lastMode: 'eigen' | 'packet' = 'eigen'
+  private lastNState = 1
 
   static get observedAttributes(): string[] {
     return [
@@ -246,16 +264,29 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     return `${this.system}|${this.width.toFixed(4)}|${this.depth.toFixed(4)}|${this.barrierWidth.toFixed(4)}|${this.kappa.toFixed(4)}`
   }
 
+  /** Packet signature: parameters that define the initial wavepacket. */
+  private packetSig(): string {
+    return `${this.packetE.toFixed(4)}|${this.sigma.toFixed(4)}`
+  }
+
   /** Re-solve and (optionally) rebuild the 3D furniture. */
   private rebuild(full: boolean): void {
     const sig = this.geoSig()
     const geoChanged = sig !== this.lastGeoSig
+    const pktSig = this.packetSig()
+    const packetChanged = pktSig !== this.lastPacketSig
     const seedAttr = this.getAttribute('data-reset')
     const seedChanged = seedAttr != null && seedAttr !== this.lastSeed
     this.lastSeed = seedAttr
 
+    const modeChanged = this.mode !== this.lastMode
+    const nStateChanged = this.nState !== this.lastNState
+    this.lastMode = this.mode
+    this.lastNState = this.nState
+
     if (full || geoChanged) {
       this.lastGeoSig = sig
+      this.lastPacketSig = pktSig
       this.grid = buildGrid(
         {
           system: this.system,
@@ -267,15 +298,22 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         },
         N_GRID,
       )
-      const pairs = eigenPairs(this.grid, EIGEN_LEVELS)
+      const pairs = eigenPairs(this.grid, EIGEN_LEVELS, this.system)
       this.eigenE = pairs.energies
       this.psiVectors = pairs.vectors
+      this.eigenBound = pairs.bound
+      this.eigenResiduals = pairs.residuals
       this.scratch = cnScratch(N_GRID)
       this.reinitPacket()
       this.clearWaterfall()
       this.buildScene()
-    } else if (seedChanged) {
+    } else if (packetChanged || seedChanged) {
+      this.lastPacketSig = pktSig
       this.reinitPacket()
+      this.clearWaterfall()
+    }
+
+    if (modeChanged || (this.mode === 'eigen' && nStateChanged)) {
       this.clearWaterfall()
     }
 
@@ -284,13 +322,17 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const e = this.eigenE[idx]
     this.psi = Number.isFinite(e) ? (this.psiVectors ? this.psiVectors[idx] : null) : null
     this.psiNodes = this.psi ? countNodes(this.psi) : 0
+    if (this.psi && this.grid) {
+      this.cachedEigenObs = observables(this.psi, this.zeroBuffer, this.grid.x, this.grid.v, this.grid.h)
+    } else {
+      this.cachedEigenObs = null
+    }
+
     // draw once now — rAF may be throttled (hidden tab) so the figure shouldn't
     // wait for the first animate frame
     this.updateSurface(true)
     this.drawOverlay()
   }
-
-  private psiVectors: Float64Array[] | null = null
 
   private reinitPacket(): void {
     const g = this.grid
@@ -299,10 +341,13 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const k0 = Math.sqrt(Math.max(1e-4, this.packetE - 1 / (4 * this.sigma * this.sigma)))
     this.packet = makePacket(g, x0, this.sigma, k0)
     this.simT = 0
+    this.simAccumulator = 0
     this.obs = null
     this.obsLeft = 0
     this.obsInside = 0
     this.obsRight = 0
+    this.lastNormError = 0
+    this.lastBoundaryProb = 0
   }
 
   private clearWaterfall(): void {
@@ -327,17 +372,22 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       this.cameraReady = true
     }
 
-    // release previous furniture
+    // Explicit persistent ownership: Detach the persistent surface mesh
+    // before releasing transient scene elements to protect GPU vertex buffers.
     if (this.group) {
+      if (this.surfMesh && this.surfMesh.parent === this.group) {
+        this.group.remove(this.surfMesh)
+      }
       scene.remove(this.group)
       this.releaseTree(this.group)
+      this.group = null
     }
     const group = new Object3D()
     group.name = 'quantum-content'
     group.position.x = 3.1 // keep the physics figure side clear
     this.group = group
 
-    // --- Probability waterfall surface ---
+    // --- Wavefunction History Waterfall Surface (persistent buffers) ---
     if (!this.surfMesh) {
       const geo = new BufferGeometry()
       geo.setAttribute('position', { array: this.surfPos, itemSize: 3 })
@@ -360,7 +410,6 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
     // --- Potential ribbon at the back ---
     this.updateRibbon()
-    if (this.ribbonMesh) group.add(this.ribbonMesh)
 
     scene.add(group)
     this.updateSurface(true)
@@ -372,25 +421,45 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     if (!g || !group) return
     if (this.ribbonMesh) {
       group.remove(this.ribbonMesh)
-      ;(this.renderer as unknown as { releaseGeometry?: (g: unknown) => void }).releaseGeometry?.(this.ribbonMesh.geometry)
+      const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
+      if (relGeo && this.ribbonMesh.geometry) {
+        relGeo(this.ribbonMesh.geometry)
+      } else if ((this.ribbonMesh.geometry as any)?.dispose) {
+        (this.ribbonMesh.geometry as any).dispose()
+      }
+      ;(this.ribbonMesh.material as any)?.dispose?.()
+      this.ribbonMesh = null
     }
+
     const geo = new BufferGeometry()
     const pos = new Float32Array(COLS * 2 * 3)
     const idx: number[] = []
-    let maxV = 0
+    let minV = Infinity
+    let maxV = -Infinity
     for (let c = 0; c < COLS; c++) {
       const v = g.v[c * STRIDE]
+      if (v < minV) minV = v
       if (v > maxV) maxV = v
     }
-    maxV = Math.max(maxV, 1e-6)
+    if (!Number.isFinite(minV)) minV = 0
+    if (!Number.isFinite(maxV)) maxV = 1
+
+    const vRange = Math.max(1e-6, maxV - minV)
+    // Anchored to V = 0 reference plane
+    const yBase = Math.max(0, -minV / vRange) * V_RIBBON_H + 0.02
+
     for (let c = 0; c < COLS; c++) {
       const xw = (g.x[c * STRIDE] / g.boxHalf) * (SURF_W / 2)
-      const y = Math.min(1.15, g.v[c * STRIDE] / maxV) * V_RIBBON_H + 0.02
+      const normV = Math.max(0, (g.v[c * STRIDE] - minV) / vRange)
+      const yTop = normV * V_RIBBON_H + 0.02
+      const yLow = Math.min(yTop, yBase)
+      const yHigh = Math.max(yTop, yBase)
+
       pos[(c * 2) * 3 + 0] = xw
-      pos[(c * 2) * 3 + 1] = 0
+      pos[(c * 2) * 3 + 1] = yLow
       pos[(c * 2) * 3 + 2] = RIBBON_Z
       pos[(c * 2 + 1) * 3 + 0] = xw
-      pos[(c * 2 + 1) * 3 + 1] = y
+      pos[(c * 2 + 1) * 3 + 1] = yHigh
       pos[(c * 2 + 1) * 3 + 2] = RIBBON_Z
     }
     for (let c = 0; c < COLS - 1; c++) {
@@ -406,10 +475,17 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   }
 
   private releaseTree(node: Object3D): void {
-    const rel = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void }).releaseGeometry
+    const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
     node.traverse((child) => {
-      const mesh = child as unknown as { geometry?: BufferGeometry }
-      if (mesh.geometry && rel) rel(mesh.geometry)
+      if (child === this.surfMesh) return // Never dispose persistent surface geometry
+      const mesh = child as unknown as { geometry?: BufferGeometry; material?: { dispose?: () => void } }
+      if (mesh.geometry) {
+        if (relGeo) relGeo(mesh.geometry)
+        else (mesh.geometry as any)?.dispose?.()
+      }
+      if (mesh.material?.dispose) {
+        mesh.material.dispose()
+      }
     })
   }
 
@@ -421,25 +497,43 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const mode = this.mode === 'eigen' && this.psi ? 'eigen' : 'packet'
 
     if (mode === 'eigen' && this.psi) {
-      // Stationary state: ψₙ oscillates at its (rescaled) Bohr frequency.
+      // Stationary state: illustrative phase visualization at frequency proportional to E_n
       this.phaseT += dt * this.speed
       const e = this.eigenE[Math.min(EIGEN_LEVELS, this.nState) - 1] || 0
       const e0 = this.eigenE[0] || 0
       const e8 = this.eigenE[Math.min(EIGEN_LEVELS, this.eigenE.length) - 1] || e0
       const rel = e8 > e0 ? (e - e0) / (e8 - e0) : 0
-      const cyclesPerSec = 0.3 + 2.2 * rel // rescaled for visibility, monotone in Eₙ
+      const cyclesPerSec = 0.3 + 2.2 * rel // monotone in E_n, rescaled for human perception
       const arg = 2 * Math.PI * cyclesPerSec * this.phaseT
       const cosv = Math.cos(arg)
       this.pushRow((j) => (this.psi ? this.psi[j * STRIDE] * cosv : 0))
     } else if (this.packet && this.scratch) {
-      const substeps = Math.max(1, Math.round(this.speed * 8))
-      const dtSub = 0.005
-      for (let s = 0; s < substeps; s++) {
-        evolvePacket(this.packet, this.grid, dtSub, this.scratch)
-        renormalise(this.packet, this.grid.h)
+      // Fixed-timestep accumulator: frame-rate independent evolution; speed 0 freezes evolution
+      if (this.speed > 0) {
+        this.simAccumulator += dt * this.speed
+        const dtSub = 0.005
+        const maxSteps = 40
+        let steps = 0
+
+        while (this.simAccumulator >= dtSub && steps < maxSteps) {
+          // Record discrete norm conservation before corrective renormalization
+          const normBefore = discreteNorm(this.packet, this.grid.h)
+          this.lastNormError = Math.abs(normBefore - 1.0)
+
+          evolvePacket(this.packet, this.grid, dtSub, this.scratch)
+          renormalise(this.packet, this.grid.h)
+          this.simAccumulator -= dtSub
+          steps++
+        }
+
+        if (steps >= maxSteps) {
+          this.simAccumulator = 0 // clamp accumulator to avoid backlog spiral
+        }
+        this.simT += dtSub * steps
       }
-      this.simT += dtSub * substeps
+
       this.obs = observables(this.packet.re, this.packet.im, this.grid.x, this.grid.v, this.grid.h)
+      this.lastBoundaryProb = boundaryProbability(this.packet, this.grid.h, 0.05)
       if (this.system === 'barrier') {
         const rp = regionProbs(this.packet.re, this.packet.im, this.grid.x, this.barrierWidth / 2, this.grid.h)
         this.obsLeft = rp.left
@@ -548,12 +642,20 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
     const xPx = (xv: number): number => mL + pw * (xv / g.boxHalf + 1) / 2
 
-    // energy window
+    // Signed energy window with support for negative and non-zero potential baselines
+    let vMin = Infinity
+    let vMax = -Infinity
+    for (let c = 0; c < COLS; c++) {
+      const v = g.v[c * STRIDE]
+      if (v < vMin) vMin = v
+      if (v > maxV && Number.isFinite(v)) maxV = v
+    }
+    if (!Number.isFinite(vMin)) vMin = 0
     let yMax = 0
     if (this.system === 'ho') {
       yMax = Math.max(1.1 * this.kappa * Math.min(6, 4), (this.eigenE[EIGEN_LEVELS - 1] || 1) * 1.3)
     } else if (this.system === 'finite') {
-      yMax = Math.max(this.depth * 1.12, (this.eigenE[EIGEN_LEVELS - 1] || 0) * 1.2)
+      yMax = Math.max(this.depth * 1.25, (this.eigenE[EIGEN_LEVELS - 1] || 0) * 1.25, 1)
     } else if (this.system === 'barrier') {
       const eNow = this.obs ? this.obs.energy : this.packetE
       yMax = Math.max(this.depth * 1.35, eNow * 1.7, 1)
@@ -561,7 +663,13 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       yMax = Math.max((this.eigenE[EIGEN_LEVELS - 1] || 1) * 1.25, 1e-3)
     }
     yMax = Math.max(yMax, 1e-6)
-    const yPx = (ev: number): number => mT + mainH * (1 - Math.min(1.05, ev / yMax))
+    const yMin = Math.min(0, vMin)
+    const eSpan = Math.max(1e-6, yMax - yMin)
+
+    const yPx = (ev: number): number => {
+      const norm = (ev - yMin) / eSpan
+      return mT + mainH * (1 - Math.max(-0.06, Math.min(1.06, norm)))
+    }
 
     ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.textBaseline = 'middle'
@@ -575,20 +683,37 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const scale = evScale(this.lengthNm)
     ctx.fillStyle = '#e2e8f0'
     ctx.textAlign = 'left'
-    ctx.fillText(`${sysName} — ${this.mode === 'eigen' ? `state n=${this.nState}` : 'wave packet'}`, mL, 12)
+    ctx.fillText(`${sysName} — ${this.mode === 'eigen' ? `State n=${this.nState} (illustrative phase rotation)` : 'Wave Packet Evolution (Crank–Nicolson)'}`, mL, 12)
     ctx.textAlign = 'right'
     ctx.fillStyle = '#64748b'
     ctx.fillText(`L = ${this.lengthNm.toFixed(2)} nm`, w - mR, 12)
     ctx.fillText(`ħ²/2mₑL² = ${scale.toFixed(3)} eV · natural units ħ = 2m = 1`, w - mR, 26)
     ctx.textAlign = 'left'
 
-    // baseline
-    ctx.strokeStyle = 'rgba(148,163,184,0.25)'
+    // baseline (V = 0 plane)
+    ctx.strokeStyle = 'rgba(148,163,184,0.35)'
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(mL, yPx(0))
     ctx.lineTo(mL + pw, yPx(0))
     ctx.stroke()
+
+    // continuum threshold marker for finite wells
+    if (this.system === 'finite') {
+      const vCont = Math.min(g.v[0], g.v[g.n - 1])
+      const yCont = yPx(vCont)
+      ctx.strokeStyle = 'rgba(245,158,11,0.45)'
+      ctx.setLineDash([4, 4])
+      ctx.beginPath()
+      ctx.moveTo(mL, yCont)
+      ctx.lineTo(mL + pw, yCont)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#f59e0b'
+      ctx.textAlign = 'right'
+      ctx.fillText(`Continuum limit V = ${vCont.toFixed(2)}`, mL + pw - 4, yCont - 7)
+      ctx.textAlign = 'left'
+    }
 
     // potential shading + curve
     const drawPotential = () => {
@@ -604,7 +729,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       ctx.strokeStyle = '#94a3b8'
       ctx.lineWidth = 1.6
       ctx.stroke()
-      // fill under V for wells/barriers
+      // fill between V and baseline for wells/barriers
       if (this.system === 'barrier' || this.system === 'finite') {
         ctx.lineTo(mL + pw, yPx(0))
         ctx.lineTo(mL, yPx(0))
@@ -621,17 +746,32 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         const e = this.eigenE[k]
         if (!Number.isFinite(e) || e > yMax) continue
         const selected = k + 1 === this.nState && this.mode === 'eigen'
-        ctx.strokeStyle = selected ? 'rgba(34,211,238,0.9)' : 'rgba(34,211,238,0.28)'
-        ctx.setLineDash(selected ? [] : [4, 4])
-        ctx.lineWidth = selected ? 1.6 : 1
+        const isBound = this.eigenBound[k] ?? true
+
+        if (selected) {
+          ctx.strokeStyle = '#22d3ee'
+          ctx.setLineDash([])
+          ctx.lineWidth = 1.8
+        } else if (isBound) {
+          ctx.strokeStyle = 'rgba(34,211,238,0.32)'
+          ctx.setLineDash([4, 4])
+          ctx.lineWidth = 1
+        } else {
+          ctx.strokeStyle = 'rgba(148,163,184,0.22)'
+          ctx.setLineDash([2, 4])
+          ctx.lineWidth = 1
+        }
+
         ctx.beginPath()
         ctx.moveTo(mL, yPx(e))
         ctx.lineTo(mL + pw, yPx(e))
         ctx.stroke()
+
         if (selected) {
           ctx.fillStyle = '#22d3ee'
           ctx.textAlign = 'left'
-          ctx.fillText(`E${this.nState} = ${e.toFixed(3)} (${(e * scale).toFixed(3)} eV)`, mL + 4, yPx(e) - 9)
+          const boundTag = this.system === 'finite' ? (isBound ? ' [Bound]' : ' [Box Continuum]') : ''
+          ctx.fillText(`E${this.nState} = ${e.toFixed(3)} (${(e * scale).toFixed(3)} eV)${boundTag}`, mL + 4, yPx(e) - 9)
         }
       }
       ctx.setLineDash([])
@@ -657,7 +797,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       for (let j = 0; j < N_GRID; j++) if (Math.abs(this.psi[j]) > pk) pk = Math.abs(this.psi[j])
       pk = Math.max(pk, 1e-12)
       const anchor = this.eigenE[Math.min(EIGEN_LEVELS, this.nState) - 1] || 0
-      const amp = yMax * 0.26
+      const amp = eSpan * 0.24
       ctx.beginPath()
       for (let c = 0; c < COLS; c++) {
         const j = c * STRIDE
@@ -671,7 +811,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       ctx.lineWidth = 1.8
       ctx.stroke()
       // zero nodes ticks
-      ctx.fillStyle = 'rgba(103,232,249,0.6)'
+      ctx.fillStyle = 'rgba(103,232,249,0.7)'
       ctx.fillText(`${this.psiNodes} node${this.psiNodes === 1 ? '' : 's'}`, mL + 4, yPx(anchor) + 11)
     } else if (this.packet) {
       let pk = 0
@@ -679,7 +819,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       for (let j = 0; j < N_GRID; j++) if (Math.abs(re[j]) > pk) pk = Math.abs(re[j])
       pk = Math.max(pk, 1e-12)
       const anchor = this.system === 'barrier' && this.obs ? Math.min(this.obs.energy, yMax * 0.62) : (this.obs ? Math.min(this.obs.energy, yMax * 0.62) : yMax * 0.45)
-      const amp = yMax * 0.3
+      const amp = eSpan * 0.28
       ctx.beginPath()
       for (let c = 0; c < COLS; c++) {
         const j = c * STRIDE
@@ -694,7 +834,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       ctx.stroke()
     }
 
-    // --- probability strip |ψ|² ---
+    // --- probability strip |ψ|² (reusing pre-allocated rhoBuffer) ---
     const stripY = probT + probH
     ctx.strokeStyle = 'rgba(148,163,184,0.25)'
     ctx.beginPath()
@@ -706,7 +846,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     ctx.fillText('|ψ|²', mL - 6, probT + probH / 2)
     ctx.textAlign = 'left'
 
-    const rho: number[] = new Array(COLS)
+    const rho = this.rhoBuffer
     let rhoMax = 0
     for (let c = 0; c < COLS; c++) {
       const j = c * STRIDE
@@ -730,22 +870,25 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     ctx.lineWidth = 1.2
     ctx.stroke()
 
-    // --- stats block ---
+    // --- stats block with live numerical diagnostics ---
     const lines: string[] = []
     if (mode === 'eigen' && this.psi && this.grid) {
-      const e = this.eigenE[Math.min(EIGEN_LEVELS, this.nState) - 1] || 0
-      const zero = new Float64Array(N_GRID)
-      const ob = observables(this.psi, zero, g.x, g.v, g.h)
-      lines.push(`ψ${this.nState}: E = ${e.toFixed(4)} nat = ${(e * scale).toFixed(3)} eV`)
-      lines.push(`nodes ${this.psiNodes}   ⟨x⟩ = ${ob.meanX.toFixed(2)}   Δx = ${ob.dx.toFixed(3)}`)
-      lines.push(`⟨p⟩ = ${ob.meanP.toFixed(4)}   Δp = ${ob.dp.toFixed(3)}`)
-      lines.push(`Δx·Δp/(ħ/2) = ${(ob.dxTimesDp / 0.5).toFixed(3)}  (Heisenberg ≥ 1)`)
+      const stateIdx = Math.min(EIGEN_LEVELS, this.nState) - 1
+      const e = this.eigenE[stateIdx] || 0
+      const ob = this.cachedEigenObs ?? observables(this.psi, this.zeroBuffer, g.x, g.v, g.h)
+      const isBound = this.eigenBound[stateIdx] ?? true
+      const res = this.eigenResiduals[stateIdx] ?? 0
+
+      lines.push(`ψ${this.nState}: E = ${e.toFixed(4)} nat = ${(e * scale).toFixed(3)} eV   [${isBound ? 'Bound' : 'Continuum / Box'}]`)
+      lines.push(`nodes ${this.psiNodes}   ⟨x⟩ = ${ob.meanX.toFixed(2)}   Δx = ${ob.dx.toFixed(3)}   ⟨p⟩ = ${ob.meanP.toFixed(4)}   Δp = ${ob.dp.toFixed(3)}`)
+      lines.push(`Δx·Δp/(ħ/2) = ${(ob.dxTimesDp / 0.5).toFixed(3)} (Heisenberg ≥ 1)   ||(H−E)ψ||₂ = ${res.toExponential(2)}`)
     } else if (this.packet && this.obs) {
       const o = this.obs
-      lines.push(`t = ${this.simT.toFixed(1)}  ⟨E⟩ = ${o.energy.toFixed(3)} (${(o.energy * scale).toFixed(2)} eV)`)
+      lines.push(`t = ${this.simT.toFixed(2)}  ⟨E⟩ = ${o.energy.toFixed(3)} (${(o.energy * scale).toFixed(2)} eV)`)
       const drift = Math.abs((o.energy - this.packet.initialEnergy) / Math.max(1e-12, this.packet.initialEnergy))
-      lines.push(`ΔE drift ${(drift * 100).toFixed(3)}%   ⟨x⟩ = ${o.meanX.toFixed(2)}   Δx = ${o.dx.toFixed(2)}`)
-      lines.push(`⟨p⟩ = ${o.meanP.toFixed(3)}   Δp = ${o.dp.toFixed(3)}   ΔxΔp/(ħ/2) = ${(o.dxTimesDp / 0.5).toFixed(2)}`)
+      const boundWarn = this.lastBoundaryProb > 0.005 ? `  ⚠️ boundary mass ${(this.lastBoundaryProb * 100).toFixed(2)}%` : ''
+      lines.push(`ΔE drift ${(drift * 100).toFixed(3)}%   pre-renorm norm err = ${this.lastNormError.toExponential(2)}${boundWarn}`)
+      lines.push(`⟨x⟩ = ${o.meanX.toFixed(2)}   Δx = ${o.dx.toFixed(2)}   ⟨p⟩ = ${o.meanP.toFixed(3)}   Δp = ${o.dp.toFixed(3)}   ΔxΔp/(ħ/2) = ${(o.dxTimesDp / 0.5).toFixed(2)}`)
       if (this.system === 'barrier') {
         const T = barrierTransmission(this.packet.initialEnergy, this.depth, this.barrierWidth)
         lines.push(`transmitted ${this.obsRight.toFixed(3)}   inside ${this.obsInside.toFixed(4)}   reflected ${this.obsLeft.toFixed(3)}`)
@@ -785,14 +928,20 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     }
     if (this.renderer) {
       if (this.group) {
-        this.group.traverse((obj) => {
-          const renderable = obj as Mesh & { geometry?: BufferGeometry }
-          if (renderable.geometry) this.renderer?.releaseGeometry(renderable.geometry)
-        })
+        if (this.surfMesh && this.surfMesh.parent === this.group) {
+          this.group.remove(this.surfMesh)
+        }
         this.scene?.remove(this.group)
+        this.releaseTree(this.group)
         this.group = null
       }
-      this.surfMesh = null
+      if (this.surfMesh) {
+        const relGeo = (this.renderer as unknown as { releaseGeometry?: (g: unknown) => void })?.releaseGeometry
+        if (relGeo && this.surfMesh.geometry) relGeo(this.surfMesh.geometry)
+        else (this.surfMesh.geometry as any)?.dispose?.()
+        ;(this.surfMesh.material as any)?.dispose?.()
+        this.surfMesh = null
+      }
       this.ribbonMesh = null
       this.renderer.dispose()
       if (this.renderer.domElement.parentElement === this) {

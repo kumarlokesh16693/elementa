@@ -14,13 +14,16 @@ import {
   buildGrid,
   eigenvalues,
   eigenvector,
+  eigenResidual,
   countNodes,
   evScale,
   hoAnalyticEnergy,
+  isStateBound,
   makePacket,
   observables,
   wellAnalyticEnergy,
   HBAR2_2M_EV_A2,
+  type Grid,
   type SystemKey,
 } from '@/lib/quantum'
 
@@ -178,7 +181,7 @@ function resetPacket(): void {
 }
 
 /** Solve the current system once (page-side readouts mirror the element). */
-function solvePage(): { energies: number[]; boxHalf: number } {
+function solvePage(): { energies: number[]; bound: boolean[]; boxHalf: number; grid: Grid } {
   const grid = buildGrid(
     {
       system: state.system,
@@ -190,31 +193,22 @@ function solvePage(): { energies: number[]; boxHalf: number } {
     },
     512,
   )
-  return { energies: eigenvalues(grid, 10), boxHalf: grid.boxHalf }
+  const energies = eigenvalues(grid, 10)
+  const bound = energies.map((e) => isStateBound(e, grid, state.system))
+  return { energies, bound, boxHalf: grid.boxHalf, grid }
 }
 
 const fmt = (v: number, d = 3): string => v.toFixed(d)
 
 export default function QuantumWavePage(): VNode {
-  const { energies, boxHalf } = solvePage()
+  const { energies, bound, boxHalf, grid } = solvePage()
   const scaleEV = evScale(state.lengthNm)
   const isBarrier = state.system === 'barrier'
   const mode = isBarrier ? 'packet' : state.mode
 
   // ---- eigenstate observables (page-side, mirrors element overlay) ----
-  let psiStats: { e: number; nodes: number; meanX: number; dx: number; meanP: number; dp: number; prod: number } | null = null
+  let psiStats: { e: number; isBound: boolean; res: number; nodes: number; meanX: number; dx: number; meanP: number; dp: number; prod: number } | null = null
   if (!isBarrier && mode === 'eigen') {
-    const grid = buildGrid(
-      {
-        system: state.system,
-        boxHalf: state.system === 'well' ? state.width / 2 : 22,
-        width: state.width,
-        depth: state.depth,
-        barrierWidth: state.barrierWidth,
-        kappa: state.kappa,
-      },
-      512,
-    )
     const idx = Math.min(10, state.n) - 1
     const e = energies[idx]
     if (Number.isFinite(e)) {
@@ -222,6 +216,8 @@ export default function QuantumWavePage(): VNode {
       const obs = observables(psi, new Float64Array(512), grid.x, grid.v, grid.h)
       psiStats = {
         e,
+        isBound: bound[idx],
+        res: eigenResidual(grid, e, psi),
         nodes: countNodes(psi),
         meanX: obs.meanX,
         dx: obs.dx,
@@ -340,13 +336,13 @@ export default function QuantumWavePage(): VNode {
             },
             Htag('span', { class: 'flex items-center gap-1' },
               Htag('span', { class: 'inline-block h-2 w-2 rounded-full bg-cyan-400' }),
-              'ψ > 0 / Re ψ'),
+              'Re ψ > 0 (Waterfall)'),
             Htag('span', { class: 'flex items-center gap-1' },
               Htag('span', { class: 'inline-block h-2 w-2 rounded-full bg-pink-400' }),
-              'ψ < 0'),
+              'Re ψ < 0'),
             Htag('span', { class: 'flex items-center gap-1' },
               Htag('span', { class: 'inline-block h-2 w-2 rounded-full bg-amber-400' }),
-              '|ψ|² / potential'),
+              '|ψ|² (2D strip) / V(x) ribbon'),
           ),
         ),
         Htag(
@@ -427,9 +423,9 @@ export default function QuantumWavePage(): VNode {
                 'div',
                 { class: 'space-y-1' },
                 energies
-                  .map((e, i) => ({ e, i }))
+                  .map((e, i) => ({ e, i, isB: bound[i] }))
                   .filter(({ e }) => Number.isFinite(e))
-                  .map(({ e, i }) =>
+                  .map(({ e, i, isB }) =>
                     Htag(
                       'button',
                       {
@@ -441,7 +437,24 @@ export default function QuantumWavePage(): VNode {
                             : 'border-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
                         }`,
                       },
-                      Htag('span', null, `n = ${i + 1}${i + 1 === state.n ? '  ◂ shown' : ''}`),
+                      Htag(
+                        'span',
+                        { class: 'flex items-center gap-2' },
+                        `n = ${i + 1}${i + 1 === state.n ? '  ◂ shown' : ''}`,
+                        state.system === 'finite'
+                          ? Htag(
+                              'span',
+                              {
+                                class: `rounded px-1.5 py-0.2 text-[9px] font-sans font-medium uppercase tracking-wider ${
+                                  isB
+                                    ? 'border border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+                                    : 'border border-amber-400/40 bg-amber-400/10 text-amber-300'
+                                }`,
+                              },
+                              isB ? 'Bound' : 'Continuum',
+                            )
+                          : Htag('span'),
+                      ),
                       Htag('span', null, `${fmt(e, 4)} nat · ${fmt(e * scaleEV, 3)} eV`),
                     ),
                   ),
@@ -501,7 +514,18 @@ export default function QuantumWavePage(): VNode {
               StatCard({ label: '⟨x⟩', value: `${psiStats.meanX >= 0 ? '+' : ''}${fmt(psiStats.meanX, 3)}`, tint: '#e4e4e7' }),
               StatCard({ label: 'Δx', value: fmt(psiStats.dx, 3), tint: '#22d3ee' }),
               StatCard({ label: 'Δp', value: fmt(psiStats.dp, 3), tint: '#f472b6' }),
+              StatCard({ label: 'residual ||Hψ−Eψ||₂', value: psiStats.res.toExponential(2), tint: '#a78bfa' }),
+              StatCard({ label: 'bound state', value: psiStats.isBound ? 'Yes' : 'No (Continuum)', tint: psiStats.isBound ? '#34d399' : '#fbbf24' }),
+              StatCard({ label: 'Δx·Δp / (ħ/2)', value: fmt(psiStats.prod, 3), tint: '#38bdf8' }),
             ),
+            state.system === 'finite' && !psiStats.isBound
+              ? Htag(
+                'div',
+                { class: 'mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10.5px] leading-relaxed text-amber-200' },
+                Htag('div', { class: 'font-semibold text-amber-300' }, '⚠️ Box-Discretized Continuum State (E > V₀)'),
+                `Energy ${fmt(psiStats.e, 4)} nat exceeds the well depth V₀ = ${fmt(state.depth, 4)} nat. This state is not physically bound within the finite well; it is a continuum wave discretized by the ±22 box Dirichlet boundaries.`,
+              )
+              : Htag('span'),
             (() => {
               const analytic =
                 state.system === 'well'
@@ -518,7 +542,7 @@ export default function QuantumWavePage(): VNode {
                       state.system === 'well'
                         ? `E${state.n} = n²π²/W² = ${fmt(analytic, 4)} nat`
                         : `E${state.n} = (n−½)ħω = (n−½)κ√2 = ${fmt(analytic, 4)} nat`),
-                    `numerical ${fmt(psiStats.e, 4)} — deviation ${(Math.abs((psiStats.e - analytic) / analytic) * 100).toFixed(3)}% (grid discretisation).`,
+                    `numerical ${fmt(psiStats.e, 4)} — deviation ${(Math.abs((psiStats.e - analytic) / analytic) * 100).toFixed(3)}% (finite difference discretisation).`,
                   )
                   : Htag(
                     'div',
@@ -530,7 +554,7 @@ export default function QuantumWavePage(): VNode {
                   { class: 'mt-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10.5px] leading-relaxed text-zinc-400' },
                   Htag('div', { class: 'font-mono text-[12px] text-fuchsia-300' },
                     `Δx·Δp = ${fmt(psiStats.prod * 0.5, 3)} · ħ/2`),
-                  `ratio to the Heisenberg bound: ${fmt(psiStats.prod, 3)} — exactly 1 only for Gaussian (oscillator) states.`,
+                  `ratio to the Heisenberg bound: ${fmt(psiStats.prod, 3)} — exactly 1 only for Gaussian (oscillator ground) state.`,
                 ),
               )
             })(),
@@ -553,7 +577,7 @@ export default function QuantumWavePage(): VNode {
             Htag(
               'p',
               { class: 'mt-2 text-[10px] leading-relaxed text-zinc-500' },
-              'A free Gaussian spreads because its plane-wave components fly at different phase velocities (v = p/m, each k its own): watch Δx grow. Live ⟨E⟩, ΔE drift, ⟨x⟩, Δp and the barrier transmitted/inside/reflected fractions are printed on the canvas overlay.',
+              'A free Gaussian spreads because its plane-wave components fly at different phase velocities (v = p/m, each k its own): watch Δx grow. Live ⟨E⟩, ΔE drift, pre-renormalization norm error, boundary reflection telemetry, and barrier fractions are printed on the canvas overlay.',
             ),
           )
           : Htag('span'),
@@ -562,8 +586,8 @@ export default function QuantumWavePage(): VNode {
         Htag(
           'div',
           { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-3 text-[10.5px] leading-relaxed text-zinc-500' },
-          Htag('div', { class: 'mb-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400' }, 'Method'),
-          `Grid: 512 points, box ≤ ±22 natural units. Eigenvalues: LDLᵀ (Sturm) sign-count bisection, ~1e-12 relative; eigenfunctions: one guarded inverse-iteration Thomas pass. Evolution: Crank–Nicolson (I + iΔtH/2)ψ⁺ = (I − iΔtH/2)ψ — exactly unitary. Internal units ħ²/2mₑ = 1; energies scale as ${fmt(HBAR2_2M_EV_A2 / ((state.lengthNm * 10) ** 2), 3)} eV per natural unit at L = ${fmt(state.lengthNm, 2)} nm.`,
+          Htag('div', { class: 'mb-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400' }, 'Method & Visualization Semantics'),
+          `Grid: 512 points, box ≤ ±22 natural units. 3D Waterfall: Wavefunction History Waterfall plotting signed amplitude Re ψ(x, t) across past time steps (preserving phase and nodes; stationary state oscillations use illustrative frequencies proportional to Eₙ). 2D Lower Strip: Probability density |ψ|² (positive definite). Evolution: Fixed-timestep accumulator Crank–Nicolson (I + iΔtH/2)ψ⁺ = (I − iΔtH/2)ψ — frame-rate independent and exactly unitary. Internal units ħ²/2mₑ = 1; energies scale as ${fmt(HBAR2_2M_EV_A2 / ((state.lengthNm * 10) ** 2), 3)} eV per natural unit at L = ${fmt(state.lengthNm, 2)} nm.`,
         ),
       ),
     ),
