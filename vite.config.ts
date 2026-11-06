@@ -122,6 +122,7 @@ export default defineConfig({
         kinetics: path.resolve(__dirname, 'kinetics.html'),
         reactor: path.resolve(__dirname, 'reactor.html'),
         integrity: path.resolve(__dirname, 'integrity.html'),
+        bec: path.resolve(__dirname, 'bec.html'),
       },
     },
   },
