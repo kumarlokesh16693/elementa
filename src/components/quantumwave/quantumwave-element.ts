@@ -113,6 +113,9 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   public packetE = 1
   public lengthNm = 1
   public animating = true
+  public viewMode: 'split' | '3d' | '2d' = 'split'
+  private pillEl: HTMLDivElement | null = null
+  private resetBtnEl: HTMLButtonElement | null = null
 
   private phaseT = 0
   private simT = 0
@@ -127,7 +130,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     return [
       'data-system', 'data-width', 'data-depth', 'data-barrier-width', 'data-kappa',
       'data-n', 'data-mode', 'data-speed', 'data-sigma', 'data-energy', 'data-length',
-      'data-anim', 'data-reset',
+      'data-anim', 'data-reset', 'data-view',
     ]
   }
 
@@ -159,54 +162,91 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const renderer = new WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.domElement.style.position = 'absolute'
-    renderer.domElement.style.inset = '0'
-    renderer.domElement.style.width = '100%'
-    renderer.domElement.style.height = '100%'
     renderer.domElement.style.touchAction = 'none'
     this.appendChild(renderer.domElement)
     this.renderer = renderer
 
     const scene = new Scene()
     const camera = new PerspectiveCamera(45, 1, 0.05, 400)
+    camera.position.set(-1.0, 5.8, 12.0)
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
+    controls.target.set(0, 0.4, -0.6)
+    controls.update()
     this.scene = scene
     this.camera = camera
     this.controls = controls
 
     scene.add(new AmbientLight(0xffffff, 0.7))
 
-    // Physics-figure overlay (left).
+    // Physics-figure overlay (left side in split mode, or full width in 2D mode)
     const overlay = document.createElement('canvas')
     overlay.style.position = 'absolute'
     overlay.style.top = '10px'
     overlay.style.left = '10px'
     overlay.style.bottom = '10px'
-    // The WebGL surface can be subtle or temporarily flat (for example before
-    // a packet has advanced). Keep the physics plot spanning the whole panel
-    // so that state never reads as an empty right-hand gutter.
-    overlay.style.width = 'calc(100% - 20px)'
-    overlay.style.height = 'calc(100% - 20px)'
-    overlay.style.pointerEvents = 'none'
     overlay.style.borderRadius = '12px'
     overlay.style.border = '1px solid rgba(255,255,255,0.10)'
-    overlay.style.background = 'rgba(8,12,20,0.88)'
+    overlay.style.background = 'rgba(8,12,20,0.92)'
     overlay.style.zIndex = '2'
     this.appendChild(overlay)
     this.overlay = overlay
 
-    const resize = () => {
-      const w = this.clientWidth || 1
-      const h = this.clientHeight || 1
-      renderer.setSize(w, h, false)
-      camera.aspect = w / h
-      camera.updateProjectionMatrix()
-      this.drawOverlay()
+    // Floating view mode pills in top-right
+    const pill = document.createElement('div')
+    pill.style.cssText =
+      'position:absolute;top:18px;right:18px;z-index:10;display:flex;gap:3px;' +
+      'background:rgba(8,12,20,0.88);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);' +
+      'border-radius:8px;padding:3px;box-shadow:0 4px 16px rgba(0,0,0,0.45);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;'
+
+    const modes: { label: string; mode: 'split' | '3d' | '2d' }[] = [
+      { label: '◨ Split', mode: 'split' },
+      { label: '🌊 3D Waterfall', mode: '3d' },
+      { label: '📊 2D Plot', mode: '2d' },
+    ]
+    for (const m of modes) {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.textContent = m.label
+      btn.dataset.mode = m.mode
+      btn.style.cssText =
+        'padding:3px 8px;font-size:10px;border-radius:5px;border:1px solid transparent;' +
+        'cursor:pointer;transition:all 0.15s ease;font-family:inherit;'
+      btn.onclick = () => {
+        this.viewMode = m.mode
+        this.updateLayout()
+        this.dispatchEvent(new CustomEvent('viewchange', { detail: { view: m.mode }, bubbles: true }))
+      }
+      pill.appendChild(btn)
     }
-    resize()
-    this.ro = new ResizeObserver(resize)
+    this.appendChild(pill)
+    this.pillEl = pill
+
+    // Reset camera button
+    const resetBtn = document.createElement('button')
+    resetBtn.type = 'button'
+    resetBtn.textContent = '⟲ Reset angle'
+    resetBtn.style.cssText =
+      'position:absolute;bottom:18px;right:18px;z-index:9;padding:3px 8px;font-size:10px;' +
+      'border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(8,12,20,0.8);' +
+      'color:#a1a1aa;cursor:pointer;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;transition:all 0.15s ease;'
+    resetBtn.onmouseenter = () => { resetBtn.style.color = '#f4f4f5'; resetBtn.style.borderColor = 'rgba(255,255,255,0.3)' }
+    resetBtn.onmouseleave = () => { resetBtn.style.color = '#a1a1aa'; resetBtn.style.borderColor = 'rgba(255,255,255,0.15)' }
+    resetBtn.onclick = () => {
+      if (this.camera && this.controls) {
+        this.camera.position.set(-1.0, 5.8, 12.0)
+        this.controls.target.set(0, 0.4, -0.6)
+        this.controls.update()
+      }
+    }
+    this.appendChild(resetBtn)
+    this.resetBtnEl = resetBtn
+
+    this.ro = new ResizeObserver(() => {
+      this.updateLayout()
+    })
     this.ro.observe(this)
 
     const tick = (now: number) => {
@@ -222,6 +262,115 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   }
 
   private lastTime = 0
+
+  public updateLayout(): void {
+    const w = this.clientWidth || 1
+    const h = this.clientHeight || 1
+    const renderer = this.renderer
+    const camera = this.camera
+    const overlay = this.overlay
+
+    // Narrow screens (<760px) fall back to 2D unless user chooses 3D
+    const isNarrow = w < 760
+    const mode = isNarrow ? (this.viewMode === '3d' ? '3d' : '2d') : this.viewMode
+
+    const pad = 10
+    const padY = 10
+    const contentH = Math.max(100, h - padY * 2)
+
+    if (mode === 'split') {
+      const gap = 12
+      // 2D diagram gets ~49% of width (min 340px)
+      const leftW = Math.round(Math.min(Math.max((w - pad * 2 - gap) * 0.49, 340), (w - pad * 2 - gap) * 0.52))
+      const rightW = Math.max(100, w - pad * 2 - gap - leftW)
+
+      if (overlay) {
+        overlay.style.display = 'block'
+        overlay.style.left = `${pad}px`
+        overlay.style.top = `${padY}px`
+        overlay.style.width = `${leftW}px`
+        overlay.style.height = `${contentH}px`
+      }
+
+      if (renderer && camera) {
+        const dom = renderer.domElement
+        dom.style.display = 'block'
+        dom.style.left = `${pad + leftW + gap}px`
+        dom.style.top = `${padY}px`
+        dom.style.width = `${rightW}px`
+        dom.style.height = `${contentH}px`
+        dom.style.borderRadius = '12px'
+        dom.style.border = '1px solid rgba(255,255,255,0.10)'
+        dom.style.background = '#080c14'
+
+        renderer.setSize(rightW, contentH, false)
+        camera.aspect = rightW / contentH
+        camera.updateProjectionMatrix()
+        if (this.controls) {
+          this.controls.target.set(0, 0.4, -0.6)
+          this.controls.update()
+        }
+      }
+      if (this.resetBtnEl) this.resetBtnEl.style.display = 'block'
+    } else if (mode === '3d') {
+      const fullW = Math.max(100, w - pad * 2)
+
+      if (overlay) {
+        overlay.style.display = 'none'
+      }
+
+      if (renderer && camera) {
+        const dom = renderer.domElement
+        dom.style.display = 'block'
+        dom.style.left = `${pad}px`
+        dom.style.top = `${padY}px`
+        dom.style.width = `${fullW}px`
+        dom.style.height = `${contentH}px`
+        dom.style.borderRadius = '12px'
+        dom.style.border = '1px solid rgba(255,255,255,0.10)'
+        dom.style.background = '#080c14'
+
+        renderer.setSize(fullW, contentH, false)
+        camera.aspect = fullW / contentH
+        camera.updateProjectionMatrix()
+        if (this.controls) {
+          this.controls.target.set(0, 0.4, -0.6)
+          this.controls.update()
+        }
+      }
+      if (this.resetBtnEl) this.resetBtnEl.style.display = 'block'
+    } else {
+      // 2D plot full view
+      const fullW = Math.max(100, w - pad * 2)
+
+      if (overlay) {
+        overlay.style.display = 'block'
+        overlay.style.left = `${pad}px`
+        overlay.style.top = `${padY}px`
+        overlay.style.width = `${fullW}px`
+        overlay.style.height = `${contentH}px`
+      }
+
+      if (renderer) {
+        renderer.domElement.style.display = 'none'
+      }
+      if (this.resetBtnEl) this.resetBtnEl.style.display = 'none'
+    }
+
+    this.updatePillUI(mode)
+    this.drawOverlay()
+  }
+
+  private updatePillUI(activeMode: 'split' | '3d' | '2d'): void {
+    if (!this.pillEl) return
+    const btns = this.pillEl.querySelectorAll('button')
+    btns.forEach((btn) => {
+      const isAct = btn.dataset.mode === activeMode
+      btn.style.background = isAct ? 'rgba(217,70,239,0.22)' : 'transparent'
+      btn.style.color = isAct ? '#f0abfc' : '#94a3b8'
+      btn.style.borderColor = isAct ? 'rgba(217,70,239,0.5)' : 'transparent'
+    })
+  }
 
   /* ------------------------------------------------------------------ */
 
@@ -246,8 +395,6 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     this.nState = Math.min(EIGEN_LEVELS, Math.max(1, Math.round(p('n', this.nState))))
     const m = raw('mode', this.mode)
     this.mode = m === 'packet' ? 'packet' : m === 'eigen' ? 'eigen' : this.mode
-    // barriers scatter — a stationary view would be meaningless
-    if (this.system === 'barrier') this.mode = 'packet'
     this.speed = Math.max(0, Math.min(4, p('speed', this.speed)))
     this.sigma = Math.max(0.35, Math.min(4, p('sigma', this.sigma)))
     this.packetE = Math.max(0.05, p('energy', this.packetE))
@@ -256,6 +403,11 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     if (a != null) {
       const t = a.trim().toLowerCase()
       this.animating = t !== 'false' && t !== '0'
+    }
+    const vm = raw('view', this.viewMode)
+    if (['split', '3d', '2d'].includes(vm) && this.viewMode !== vm) {
+      this.viewMode = vm as 'split' | '3d' | '2d'
+      this.updateLayout()
     }
   }
 
@@ -384,7 +536,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     }
     const group = new Object3D()
     group.name = 'quantum-content'
-    group.position.x = 3.1 // keep the physics figure side clear
+    group.position.set(0, 0, 0) // Centered in the 3D viewport
     this.group = group
 
     // --- Wavefunction History Waterfall Surface (persistent buffers) ---
@@ -741,8 +893,8 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     }
     drawPotential()
 
-    // energy levels (not for the pure-barrier system: no bound states)
-    if (this.system !== 'barrier') {
+    // energy levels (stationary eigenstates for all systems, or packet baseline)
+    if (this.mode === 'eigen' || this.system !== 'barrier') {
       for (let k = 0; k < EIGEN_LEVELS; k++) {
         const e = this.eigenE[k]
         if (!Number.isFinite(e) || e > yMax) continue
@@ -771,7 +923,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         if (selected) {
           ctx.fillStyle = '#22d3ee'
           ctx.textAlign = 'left'
-          const boundTag = this.system === 'finite' ? (isBound ? ' [Bound]' : ' [Box Continuum]') : ''
+          const boundTag = this.system === 'finite' ? (isBound ? ' [Bound]' : ' [Box Continuum]') : this.system === 'barrier' ? (isBound ? ' [Tunnel]' : ' [Box Continuum]') : ''
           ctx.fillText(`E${this.nState} = ${e.toFixed(3)} (${(e * scale).toFixed(3)} eV)${boundTag}`, mL + 4, yPx(e) - 9)
         }
       }
@@ -792,7 +944,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     }
 
     // eigen ψₙ (scaled about its level) / packet Re ψ (scaled about ⟨E⟩)
-    const mode = this.mode === 'eigen' && this.psi && this.system !== 'barrier' ? 'eigen' : 'packet'
+    const mode = this.mode === 'eigen' && this.psi ? 'eigen' : 'packet'
     if (mode === 'eigen' && this.psi) {
       let pk = 0
       for (let j = 0; j < N_GRID; j++) if (Math.abs(this.psi[j]) > pk) pk = Math.abs(this.psi[j])
@@ -953,6 +1105,14 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     if (this.overlay && this.overlay.parentElement === this) {
       this.removeChild(this.overlay)
       this.overlay = null
+    }
+    if (this.pillEl && this.pillEl.parentElement === this) {
+      this.removeChild(this.pillEl)
+      this.pillEl = null
+    }
+    if (this.resetBtnEl && this.resetBtnEl.parentElement === this) {
+      this.removeChild(this.resetBtnEl)
+      this.resetBtnEl = null
     }
     this.scene = null
     this.camera = null

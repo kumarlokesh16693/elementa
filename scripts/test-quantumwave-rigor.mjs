@@ -261,4 +261,36 @@ test('Boundary probability monitor flags edge interaction correctly', () => {
   assert.ok(pEdgeCenter < 1e-6, `Center packet should have negligible boundary mass, got ${pEdgeCenter}`)
 })
 
+// ---------------------------------------------------------
+// 6. Barrier Potential Eigenstates & Doublet Splitting
+// ---------------------------------------------------------
+test('Barrier potential supports stationary eigenstates with tunnel doublet splitting', () => {
+  const V0 = 2.0
+  const BW = 2.0
+  const grid = buildGrid({
+    system: 'barrier',
+    boxHalf: 22,
+    width: 10,
+    depth: V0,
+    barrierWidth: BW,
+    kappa: 0.6,
+  }, 512)
+
+  const pairs = eigenPairs(grid, 10, 'barrier')
+  assert.strictEqual(pairs.energies.length, 10)
+  
+  // States below V0 should be tunnel bound states
+  for (let i = 0; i < pairs.energies.length; i++) {
+    const e = pairs.energies[i]
+    if (e < V0) {
+      assert.strictEqual(pairs.bound[i], true, `Level ${i + 1} with E=${e} < V0 (${V0}) should be tunnel state`)
+    }
+  }
+
+  // Doublet splitting: E2 - E1 > 0 and small
+  const deltaE = pairs.energies[1] - pairs.energies[0]
+  assert.ok(deltaE > 0 && deltaE < 0.01, `Doublet splitting deltaE should be small positive, got ${deltaE}`)
+  console.log(`    → Barrier tunnel doublet splitting ΔE = ${deltaE.toExponential(3)} nat`)
+})
+
 console.log(`\n🎉 All ${passCount} tests passed with 100% rigorous verification!\n`)

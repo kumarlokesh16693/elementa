@@ -107,7 +107,7 @@ function getInitialParams(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const params = new URLSearchParams(window.location.search)
   const out: Record<string, string> = {}
-  for (const k of ['system', 'mode', 'n', 'width', 'depth', 'bw', 'kappa', 'sigma', 'energy', 'speed', 'L', 'animate']) {
+  for (const k of ['system', 'mode', 'n', 'width', 'depth', 'bw', 'kappa', 'sigma', 'energy', 'speed', 'L', 'animate', 'view']) {
     const v = params.get(k)
     if (v != null) out[k] = v
   }
@@ -123,6 +123,7 @@ const num = (o: Record<string, string>, k: string, d: number): number => {
 const state = reactive({
   system: (['well', 'finite', 'ho', 'barrier'].includes(initial.system ?? '') ? initial.system : 'well') as SystemKey,
   mode: (initial.mode === 'packet' ? 'packet' : 'eigen') as 'eigen' | 'packet',
+  view: (['split', '3d', '2d'].includes(initial.view ?? '') ? initial.view : 'split') as 'split' | '3d' | '2d',
   n: Math.min(10, Math.max(1, Math.round(num(initial, 'n', 1)))),
   width: num(initial, 'width', 10),
   depth: num(initial, 'depth', 2),
@@ -142,6 +143,7 @@ function syncUrl(): void {
   const next = new URLSearchParams()
   next.set('system', state.system)
   next.set('mode', state.mode)
+  next.set('view', state.view)
   next.set('n', String(state.n))
   next.set('width', String(state.width))
   next.set('depth', String(state.depth))
@@ -161,15 +163,12 @@ function syncUrl(): void {
 
 function setSystem(key: SystemKey): void {
   state.system = key
-  // packet-only mode for the pure barrier; eigen defaults otherwise
-  state.mode = key === 'barrier' ? 'packet' : state.mode === 'packet' ? 'eigen' : state.mode
   state.n = Math.min(state.n, 10)
   state.seed++
   syncUrl()
 }
 
 function setMode(mode: 'eigen' | 'packet'): void {
-  if (state.system === 'barrier') return
   state.mode = mode
   state.seed++
   syncUrl()
@@ -204,11 +203,11 @@ export default function QuantumWavePage(): VNode {
   const { energies, bound, boxHalf, grid } = solvePage()
   const scaleEV = evScale(state.lengthNm)
   const isBarrier = state.system === 'barrier'
-  const mode = isBarrier ? 'packet' : state.mode
+  const mode = state.mode
 
   // ---- eigenstate observables (page-side, mirrors element overlay) ----
   let psiStats: { e: number; isBound: boolean; res: number; nodes: number; meanX: number; dx: number; meanP: number; dp: number; prod: number } | null = null
-  if (!isBarrier && mode === 'eigen') {
+  if (mode === 'eigen') {
     const idx = Math.min(10, state.n) - 1
     const e = energies[idx]
     if (Number.isFinite(e)) {
@@ -270,6 +269,7 @@ export default function QuantumWavePage(): VNode {
     'data-length': String(state.lengthNm),
     'data-anim': state.animate ? 'true' : 'false',
     'data-reset': String(state.seed),
+    'data-view': state.view,
   }
 
   return Htag(
@@ -326,6 +326,10 @@ export default function QuantumWavePage(): VNode {
           { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-2 flex-1 relative' },
           Htag('elementa-quantumwave', {
             ...attrs,
+            onviewchange: (e: CustomEvent) => {
+              state.view = e.detail.view
+              syncUrl()
+            },
             style: 'width: 100%; height: 100%; display: block;',
           }),
           Htag(
@@ -349,8 +353,12 @@ export default function QuantumWavePage(): VNode {
           'div',
           { class: 'mt-2 flex flex-wrap items-center gap-2' },
           toggle('Animate', state.animate, () => { state.animate = !state.animate; syncUrl() }),
-          toggle('Eigenstates', mode === 'eigen' && !isBarrier, () => setMode('eigen')),
+          toggle('Eigenstates', mode === 'eigen', () => setMode('eigen')),
           toggle('Packet', mode === 'packet', () => setMode('packet')),
+          Htag('div', { class: 'h-4 w-[1px] bg-white/10 mx-1' }),
+          toggle('◨ Split', state.view === 'split', () => { state.view = 'split'; syncUrl() }),
+          toggle('🌊 3D Waterfall', state.view === '3d', () => { state.view = '3d'; syncUrl() }),
+          toggle('📊 2D Plot', state.view === '2d', () => { state.view = '2d'; syncUrl() }),
           Htag(
             'button',
             {
@@ -363,9 +371,13 @@ export default function QuantumWavePage(): VNode {
           Htag(
             'span',
             { class: 'font-mono text-[10px] text-zinc-600' },
-            isBarrier
-              ? `V₀ = ${fmt(state.depth * scaleEV, 2)} eV · tunnel probability settles on the canvas`
-              : `ħω = ${sigmaKEV.toFixed(2)} eV${mode === 'eigen' ? '' : ` · E₀ = ${fmt(packetE0 * scaleEV, 2)} eV`}`,
+            state.view !== '2d'
+              ? '🖱️ Drag to orbit · Scroll to zoom'
+              : mode === 'packet' && isBarrier
+                ? `V₀ = ${fmt(state.depth * scaleEV, 2)} eV · tunnel probability settles on the canvas`
+                : mode === 'eigen'
+                  ? `State n = ${state.n} · E = ${fmt((energies[state.n - 1] ?? 0) * scaleEV, 3)} eV`
+                  : `ħω = ${sigmaKEV.toFixed(2)} eV · E₀ = ${fmt(packetE0 * scaleEV, 2)} eV`,
           ),
         ),
       ),
@@ -405,7 +417,9 @@ export default function QuantumWavePage(): VNode {
             'p',
             { class: 'mt-2 text-[10px] leading-relaxed text-zinc-500' },
             isBarrier
-              ? 'A barrier has no bound states — launch a packet at it and watch it split: the part that gets through materialised "inside the classically forbidden region".'
+              ? mode === 'eigen'
+                ? 'Energies are stationary eigenvalues of the central barrier in the computational box (Sturm bisection). For E < V₀, states tunnel through the barrier forming doublet pairs.'
+                : 'A barrier scatters incident wave packets — watch the wave split into reflected and transmitted pulses: the transmitted pulse tunnels through the classically forbidden barrier (E₀ < V₀).'
               : mode === 'eigen'
                 ? 'Energies are eigenvalues of H = p²/2mₑ + V on a 512-point grid (Sturm bisection); ψ comes from one inverse-iteration pass.'
                 : 'The packet evolves under the unitary Crank–Nicolson scheme — norm and ⟨E⟩ are conserved to numerical precision.',
@@ -413,91 +427,94 @@ export default function QuantumWavePage(): VNode {
         ),
 
         // Spectrum or packet-energy controls
-        !isBarrier
+        mode === 'eigen'
           ? Htag(
             'div',
             { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-3' },
-            SectionTitle(mode === 'eigen' ? 'Spectrum (E₁ … E₁₀)' : 'Spectrum / packet energy'),
-            mode === 'eigen'
-              ? Htag(
-                'div',
-                { class: 'space-y-1' },
-                energies
-                  .map((e, i) => ({ e, i, isB: bound[i] }))
-                  .filter(({ e }) => Number.isFinite(e))
-                  .map(({ e, i, isB }) =>
+            SectionTitle('Spectrum (E₁ … E₁₀)'),
+            Htag(
+              'div',
+              { class: 'space-y-1' },
+              energies
+                .map((e, i) => ({ e, i, isB: bound[i] }))
+                .filter(({ e }) => Number.isFinite(e))
+                .map(({ e, i, isB }) =>
+                  Htag(
+                    'button',
+                    {
+                      type: 'button',
+                      onclick: () => { state.n = i + 1; syncUrl() },
+                      class: `flex w-full items-center justify-between rounded-md border px-2.5 py-1 text-left font-mono text-[11px] transition ${
+                        state.n === i + 1
+                          ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-300'
+                          : 'border-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                      }`,
+                    },
                     Htag(
-                      'button',
-                      {
-                        type: 'button',
-                        onclick: () => { state.n = i + 1; syncUrl() },
-                        class: `flex w-full items-center justify-between rounded-md border px-2.5 py-1 text-left font-mono text-[11px] transition ${
-                          state.n === i + 1
-                            ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-300'
-                            : 'border-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
-                        }`,
-                      },
-                      Htag(
-                        'span',
-                        { class: 'flex items-center gap-2' },
-                        `n = ${i + 1}${i + 1 === state.n ? '  ◂ shown' : ''}`,
-                        state.system === 'finite'
-                          ? Htag(
-                              'span',
-                              {
-                                class: `rounded px-1.5 py-0.2 text-[9px] font-sans font-medium uppercase tracking-wider ${
-                                  isB
-                                    ? 'border border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
-                                    : 'border border-amber-400/40 bg-amber-400/10 text-amber-300'
-                                }`,
-                              },
-                              isB ? 'Bound' : 'Continuum',
-                            )
-                          : Htag('span'),
-                      ),
-                      Htag('span', null, `${fmt(e, 4)} nat · ${fmt(e * scaleEV, 3)} eV`),
+                      'span',
+                      { class: 'flex items-center gap-2' },
+                      `n = ${i + 1}${i + 1 === state.n ? '  ◂ shown' : ''}`,
+                      state.system === 'finite' || state.system === 'barrier'
+                        ? Htag(
+                            'span',
+                            {
+                              class: `rounded px-1.5 py-0.2 text-[9px] font-sans font-medium uppercase tracking-wider ${
+                                isB
+                                  ? 'border border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+                                  : 'border border-amber-400/40 bg-amber-400/10 text-amber-300'
+                              }`,
+                            },
+                            isB ? (state.system === 'barrier' ? 'Tunnel' : 'Bound') : 'Continuum',
+                          )
+                        : Htag('span'),
                     ),
+                    Htag('span', null, `${fmt(e, 4)} nat · ${fmt(e * scaleEV, 3)} eV`),
                   ),
-              )
-              : Htag('div', { class: 'space-y-2.5' },
+                ),
+            ),
+          )
+          : isBarrier
+            ? Htag(
+              'div',
+              { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-3' },
+              SectionTitle('Scattering parameters'),
+              Htag('div', { class: 'space-y-2.5' },
                 slider('Packet energy E₀', 0.05, 6, 0.05, () => state.packetE, (v) => { state.packetE = v }),
                 slider('Initial width σ₀', 0.4, 3, 0.05, () => state.sigma, (v) => { state.sigma = v }),
                 slider('Evolution speed', 0, 4, 0.1, () => state.speed, (v) => { state.speed = v }),
               ),
-            mode === 'packet'
-              ? Htag(
+              Htag(
+                'div',
+                { class: 'mt-2 grid grid-cols-3 gap-2' },
+                StatCard({ label: 'E₀', value: `${fmt(packetE0, 3)} nat`, tint: '#67e8f9' }),
+                StatCard({ label: 'E₀', value: `${fmt(packetE0 * scaleEV, 2)} eV`, tint: '#fbbf24' }),
+                StatCard({ label: 'E₀ / V₀', value: fmt(packetE0 / state.depth, 3), tint: '#e4e4e7' }),
+              ),
+              Htag(
+                'div',
+                { class: 'mt-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10.5px] leading-relaxed text-zinc-400' },
+                Htag('div', { class: 'font-mono text-[12px] text-fuchsia-300' },
+                  `T(E₀) = ${fmt(tAnalytic ?? 0, 4)}`),
+                'exact transmission through the rectangular barrier. A Gaussian packet averages T(E) over its energy spread (Δp = ħ/2σ₀), so the live transmitted fraction on the canvas sits near, not exactly at, T(E₀).',
+              ),
+            )
+            : Htag(
+              'div',
+              { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-3' },
+              SectionTitle('Wave packet parameters'),
+              Htag('div', { class: 'space-y-2.5' },
+                slider('Packet energy E₀', 0.05, 6, 0.05, () => state.packetE, (v) => { state.packetE = v }),
+                slider('Initial width σ₀', 0.4, 3, 0.05, () => state.sigma, (v) => { state.sigma = v }),
+                slider('Evolution speed', 0, 4, 0.1, () => state.speed, (v) => { state.speed = v }),
+              ),
+              Htag(
                 'div',
                 { class: 'mt-2 grid grid-cols-3 gap-2' },
                 StatCard({ label: '⟨E⟩', value: `${fmt(packetE0, 3)} nat`, tint: '#67e8f9' }),
                 StatCard({ label: 'k₀', value: fmt(k0, 3), tint: '#e4e4e7' }),
                 StatCard({ label: '⟨E⟩', value: `${fmt(packetE0 * scaleEV, 2)} eV`, tint: '#fbbf24' }),
-              )
-              : Htag('span'),
-          )
-          : Htag(
-            'div',
-            { class: 'rounded-xl border border-white/10 bg-[#0a0f18] p-3' },
-            SectionTitle('Scattering parameters'),
-            Htag('div', { class: 'space-y-2.5' },
-              slider('Packet energy E₀', 0.05, 6, 0.05, () => state.packetE, (v) => { state.packetE = v }),
-              slider('Initial width σ₀', 0.4, 3, 0.05, () => state.sigma, (v) => { state.sigma = v }),
-              slider('Evolution speed', 0, 4, 0.1, () => state.speed, (v) => { state.speed = v }),
+              ),
             ),
-            Htag(
-              'div',
-              { class: 'mt-2 grid grid-cols-3 gap-2' },
-              StatCard({ label: 'E₀', value: `${fmt(packetE0, 3)} nat`, tint: '#67e8f9' }),
-              StatCard({ label: 'E₀', value: `${fmt(packetE0 * scaleEV, 2)} eV`, tint: '#fbbf24' }),
-              StatCard({ label: 'E₀ / V₀', value: fmt(packetE0 / state.depth, 3), tint: '#e4e4e7' }),
-            ),
-            Htag(
-              'div',
-              { class: 'mt-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10.5px] leading-relaxed text-zinc-400' },
-              Htag('div', { class: 'font-mono text-[12px] text-fuchsia-300' },
-                `T(E₀) = ${fmt(tAnalytic ?? 0, 4)}`),
-              'exact transmission through the rectangular barrier. A Gaussian packet averages T(E) over its energy spread (Δp = ħ/2σ₀), so the live transmitted fraction on the canvas sits near, not exactly at, T(E₀).',
-            ),
-          ),
 
         // Eigenstate physics
         psiStats
@@ -515,7 +532,7 @@ export default function QuantumWavePage(): VNode {
               StatCard({ label: 'Δx', value: fmt(psiStats.dx, 3), tint: '#22d3ee' }),
               StatCard({ label: 'Δp', value: fmt(psiStats.dp, 3), tint: '#f472b6' }),
               StatCard({ label: 'residual ||Hψ−Eψ||₂', value: psiStats.res.toExponential(2), tint: '#a78bfa' }),
-              StatCard({ label: 'bound state', value: psiStats.isBound ? 'Yes' : 'No (Continuum)', tint: psiStats.isBound ? '#34d399' : '#fbbf24' }),
+              StatCard({ label: state.system === 'barrier' ? 'tunnel state' : 'bound state', value: psiStats.isBound ? (state.system === 'barrier' ? 'Yes (Tunnel)' : 'Yes') : 'No (Continuum)', tint: psiStats.isBound ? '#34d399' : '#fbbf24' }),
               StatCard({ label: 'Δx·Δp / (ħ/2)', value: fmt(psiStats.prod, 3), tint: '#38bdf8' }),
             ),
             state.system === 'finite' && !psiStats.isBound
@@ -525,7 +542,16 @@ export default function QuantumWavePage(): VNode {
                 Htag('div', { class: 'font-semibold text-amber-300' }, '⚠️ Box-Discretized Continuum State (E > V₀)'),
                 `Energy ${fmt(psiStats.e, 4)} nat exceeds the well depth V₀ = ${fmt(state.depth, 4)} nat. This state is not physically bound within the finite well; it is a continuum wave discretized by the ±22 box Dirichlet boundaries.`,
               )
-              : Htag('span'),
+              : state.system === 'barrier'
+                ? Htag(
+                  'div',
+                  { class: `mt-2 rounded-lg border px-3 py-2 text-[10.5px] leading-relaxed ${psiStats.isBound ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200' : 'border-amber-500/30 bg-amber-500/10 text-amber-200'}` },
+                  Htag('div', { class: `font-semibold ${psiStats.isBound ? 'text-cyan-300' : 'text-amber-300'}` }, psiStats.isBound ? '🚇 Barrier Tunnel State (E < V₀)' : '🌊 Over-Barrier Continuum State (E ≥ V₀)'),
+                  psiStats.isBound
+                    ? `Energy ${fmt(psiStats.e, 4)} nat is below barrier top V₀ = ${fmt(state.depth, 4)} nat. The wavefunction decays exponentially inside the barrier and forms a tunnel doublet pair with its neighboring parity state.`
+                    : `Energy ${fmt(psiStats.e, 4)} nat exceeds the barrier top V₀ = ${fmt(state.depth, 4)} nat. The particle propagates over the barrier with altered local wavelength.`,
+                )
+                : Htag('span'),
             (() => {
               const analytic =
                 state.system === 'well'

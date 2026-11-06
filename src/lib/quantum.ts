@@ -118,7 +118,11 @@ export function eigenvalues(grid: Grid, count: number): number[] {
 export function isStateBound(energy: number, grid: Grid, system: SystemKey): boolean {
   if (!Number.isFinite(energy)) return false
   if (system === 'well' || system === 'ho') return true
-  if (system === 'barrier') return false
+  if (system === 'barrier') {
+    const midIdx = Math.floor(grid.n / 2)
+    const vBarrier = grid.v[midIdx]
+    return energy < vBarrier - 1e-9
+  }
   const vInf = Math.min(grid.v[0], grid.v[grid.n - 1])
   return energy < vInf - 1e-9
 }
