@@ -15,7 +15,7 @@ export function ThermalHydraulicsPanel({
   preset,
   thermalPowerMWth,
   electricPowerMWe,
-  fuelTempC,
+  fuelTempAvgC,
   coolantInC,
   coolantOutC,
   steamPressMPa,
@@ -26,7 +26,7 @@ export function ThermalHydraulicsPanel({
   preset: ReactorPreset
   thermalPowerMWth: number
   electricPowerMWe: number
-  fuelTempC: number
+  fuelTempAvgC: number
   coolantInC: number
   coolantOutC: number
   steamPressMPa: number
@@ -74,7 +74,7 @@ export function ThermalHydraulicsPanel({
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
               H('span', { class: 'text-zinc-500' }, 'Peak Fuel Centerline:'),
-              H('span', { class: `${fuelTempC > 1200 ? 'text-rose-400' : 'text-zinc-200'} font-bold` }, `${fuelTempC.toFixed(1)} °C`),
+              H('span', { class: `${fuelTempAvgC > 1200 ? 'text-rose-400' : 'text-zinc-200'} font-bold` }, `${fuelTempAvgC.toFixed(1)} °C`),
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
               H('span', { class: 'text-zinc-500' }, 'Coolant Outlet (Hot Leg):'),
@@ -155,3 +155,4 @@ export function ThermalHydraulicsPanel({
     ),
   )
 }
+

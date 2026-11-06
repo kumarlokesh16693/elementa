@@ -516,7 +516,7 @@
 
 ---
 
-## ⚡ 18. Technology Stack & Framework Purity
+## ⚡ 19. Technology Stack & Framework Purity
 
 - **Core Engine**: Pure **`nexus-framework`** (`mount`, `patch`, `effect`, `reactive`, `h`, `VNode`).
 - **3D Graphics**: **`@nexus/3d`** WebGL hardware-accelerated rendering.

@@ -43,7 +43,7 @@ export const reactorStore = reactive<ReactorState>({
   iodine135Rel: 100.0,
   xenon135Rel: 100.0,
   xenonReactivityPcm: -2800.0,
-  fuelTempC: 650.0,
+  fuelTempAvgC: 650.0,
   coolantInletTempC: REACTOR_PRESETS[0].inletTempC,
   coolantOutletTempC: REACTOR_PRESETS[0].outletTempC,
   coolantFlowRatePct: 100.0,
@@ -81,7 +81,7 @@ function initReactorPhysicsLoop() {
       const deltaRodPcm = currentRodPcm - nominalRodPcm
 
       const deltaBoronPcm = -(reactorStore.boronConcentrationPpm - 800) * 7.2
-      const deltaDopplerPcm = (reactorStore.fuelTempC - 650.0) * preset.dopplerCoeffPcmPerC
+      const deltaDopplerPcm = (reactorStore.fuelTempAvgC - 650.0) * preset.dopplerCoeffPcmPerC
       const deltaMtcPcm = (reactorStore.coolantOutletTempC - preset.outletTempC) * preset.moderatorTempCoeffPcmPerC
       const deltaXePcm = -(reactorStore.xenon135Rel - 100.0) * 28.0
 
@@ -132,12 +132,12 @@ function initReactorPhysicsLoop() {
         preset,
         reactorStore.neutronFluxNormalized,
         reactorStore.coolantFlowRatePct,
-        reactorStore.fuelTempC,
+        reactorStore.fuelTempAvgC,
         reactorStore.coolantOutletTempC,
         dt
       )
 
-      reactorStore.fuelTempC = th.fuelTempC
+      reactorStore.fuelTempAvgC = th.fuelTempC
       reactorStore.coolantInletTempC = th.coolantInC
       reactorStore.coolantOutletTempC = th.coolantOutC
       reactorStore.steamPressureMPa = th.steamPressMPa
@@ -355,7 +355,7 @@ export function ReactorWorkbench(): VNode {
               H('elementa-reactor-3d', {
                 'data-insertion': String(store.controlRodInsertion),
                 'data-flux': String(store.neutronFluxNormalized),
-                'data-temp': String(store.fuelTempC),
+                'data-temp': String(store.fuelTempAvgC),
                 'data-scram': String(store.scramActive),
                 class: 'h-full w-full block',
               }),
@@ -398,7 +398,7 @@ export function ReactorWorkbench(): VNode {
                     ),
                     H('div', { class: 'flex justify-between p-2 rounded bg-black/40 border border-white/5' },
                       H('span', { class: 'text-zinc-400' }, 'Fuel Doppler Effect (²³⁸U Capture):'),
-                      H('span', { class: 'text-sky-300 font-bold' }, `${((store.fuelTempC - 650) * preset.dopplerCoeffPcmPerC).toFixed(1)} pcm`),
+                      H('span', { class: 'text-sky-300 font-bold' }, `${((store.fuelTempAvgC - 650) * preset.dopplerCoeffPcmPerC).toFixed(1)} pcm`),
                     ),
                     H('div', { class: 'flex justify-between p-2 rounded bg-black/40 border border-white/5' },
                       H('span', { class: 'text-zinc-400' }, 'Moderator Temp Coeff (MTC):'),
@@ -421,7 +421,7 @@ export function ReactorWorkbench(): VNode {
               preset,
               thermalPowerMWth: store.thermalPowerMWth,
               electricPowerMWe: store.electricPowerMWe,
-              fuelTempC: store.fuelTempC,
+              fuelTempAvgC: store.fuelTempAvgC,
               coolantInC: store.coolantInletTempC,
               coolantOutC: store.coolantOutletTempC,
               steamPressMPa: store.steamPressureMPa,
@@ -480,3 +480,4 @@ export function ReactorWorkbench(): VNode {
     ),
   )
 }
+

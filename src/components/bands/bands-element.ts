@@ -61,6 +61,7 @@ export class ElementaBandsElement extends HTMLElement {
   private ro: ResizeObserver | null = null
   private group: Object3D | null = null
   private overlay: HTMLCanvasElement | null = null
+  private pillEl: HTMLElement | null = null
   private noteEl: HTMLElement | null = null
   private ready = false
   private lastTime = 0
@@ -74,6 +75,7 @@ export class ElementaBandsElement extends HTMLElement {
   public filling = 1
   public temperature = 300
   public autoRotate = true
+  public viewMode: 'split' | '3d' | '2d' = 'split'
 
   // cached analysis for the current parameters
   public analysis: BandAnalysis | null = null
@@ -84,7 +86,7 @@ export class ElementaBandsElement extends HTMLElement {
   static get observedAttributes(): string[] {
     return [
       'data-model', 'data-t', 'data-a', 'data-delta', 'data-gap',
-      'data-fill', 'data-temp', 'data-rot', 'data-reset',
+      'data-fill', 'data-temp', 'data-rot', 'data-reset', 'data-view',
     ]
   }
 
@@ -102,6 +104,7 @@ export class ElementaBandsElement extends HTMLElement {
   attributeChangedCallback(): void {
     if (!this.ready) return
     this.readAttributes()
+    this.updateLayout()
     this.rebuild(false)
   }
 
@@ -118,9 +121,6 @@ export class ElementaBandsElement extends HTMLElement {
     overlay.style.top = '10px'
     overlay.style.left = '10px'
     overlay.style.bottom = '10px'
-    overlay.style.width = '58%'
-    overlay.style.height = 'calc(100% - 20px)'
-    overlay.style.pointerEvents = 'none'
     overlay.style.borderRadius = '12px'
     overlay.style.border = '1px solid rgba(255,255,255,0.10)'
     overlay.style.background = '#080c14'
@@ -134,24 +134,20 @@ export class ElementaBandsElement extends HTMLElement {
     try {
       renderer = new WebGLRenderer({ antialias: true, alpha: true })
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+      renderer.setClearColor('#080c14', 1.0)
       renderer.domElement.style.position = 'absolute'
-      renderer.domElement.style.inset = '0'
-      renderer.domElement.style.width = '100%'
-      renderer.domElement.style.height = '100%'
       renderer.domElement.style.touchAction = 'none'
       this.appendChild(renderer.domElement)
       this.renderer = renderer
 
       scene = new Scene()
       camera = new PerspectiveCamera(45, 1, 0.05, 400)
-      // Bias the surface into the right-hand strip that the figure does not
-      // cover, so the whole dispersion stays visible beside the overlay.
-      camera.position.set(1.6, 8.1, 8.7)
+      camera.position.set(0, 7.5, 9.5)
       const controls = new OrbitControls(camera, renderer.domElement)
-      controls.target.set(1.6, -0.1, 0)
+      controls.target.set(0, -0.1, 0)
       controls.enableDamping = true
       controls.dampingFactor = 0.08
-      controls.minDistance = 5
+      controls.minDistance = 4
       controls.maxDistance = 42
       controls.updateSphericalFromCamera()
       controls.update()
@@ -176,25 +172,41 @@ export class ElementaBandsElement extends HTMLElement {
       this.noteEl = note
     }
 
-    const resize = () => {
-      const w = this.clientWidth || 1
-      const h = this.clientHeight || 1
-      // Below ~640 px the figure is dense (and with no GL surface it is the
-      // only view), so let it own the whole panel.
-      if (overlay) overlay.style.width = !renderer || w < 640 ? 'calc(100% - 20px)' : '58%'
-      if (renderer && camera) {
-        renderer.setSize(w, h, false)
-        camera.aspect = w / h
-        camera.updateProjectionMatrix()
-        if (this.controls) {
-          const fit = Math.min(2.2, Math.max(1, 1.25 / camera.aspect))
-          this.controls.setDistance(13.2 * fit)
-        }
-      }
-      this.drawOverlay()
+    // Floating view mode pills in the top-right
+    const pill = document.createElement('div')
+    pill.style.cssText =
+      'position:absolute;top:18px;right:18px;z-index:10;display:flex;gap:3px;' +
+      'background:rgba(8,12,20,0.88);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);' +
+      'border-radius:8px;padding:3px;box-shadow:0 4px 16px rgba(0,0,0,0.45);font-family:' + FONT + ';'
+
+    const modes: { label: string; mode: 'split' | '3d' | '2d' }[] = [
+      { label: '◨ Split', mode: 'split' },
+      { label: '🌐 3D', mode: '3d' },
+      { label: '📊 2D', mode: '2d' },
+    ]
+    for (const m of modes) {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.textContent = m.label
+      btn.dataset.mode = m.mode
+      btn.style.cssText =
+        'padding:3px 8px;font-size:10px;border-radius:5px;border:none;' +
+        'cursor:pointer;transition:all 0.15s ease;'
+      btn.addEventListener('pointerdown', (e) => e.stopPropagation())
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        this.viewMode = m.mode
+        this.setAttribute('data-view', m.mode)
+        this.dispatchEvent(new CustomEvent('elementa-bands-view-change', { detail: m.mode, bubbles: true }))
+        this.updateLayout()
+      })
+      pill.appendChild(btn)
     }
-    resize()
-    this.ro = new ResizeObserver(resize)
+    this.appendChild(pill)
+    this.pillEl = pill
+
+    this.updateLayout()
+    this.ro = new ResizeObserver(() => this.updateLayout())
     this.ro.observe(this)
 
     if (renderer && scene && camera) {
@@ -214,6 +226,119 @@ export class ElementaBandsElement extends HTMLElement {
     }
 
     this.ready = true
+  }
+
+  private updateLayout(): void {
+    const w = this.clientWidth || 1
+    const h = this.clientHeight || 1
+    const renderer = this.renderer
+    const camera = this.camera
+    const overlay = this.overlay
+
+    // Small screens (<740px) default to 2D view unless user explicitly chooses 3D
+    const isNarrow = w < 740
+    const mode = isNarrow ? (this.viewMode === '3d' ? '3d' : '2d') : this.viewMode
+
+    const pad = 10
+    const padY = 10
+    const contentH = Math.max(100, h - padY * 2)
+
+    if (mode === 'split') {
+      const gap = 12
+      // 2D diagram gets ~49% of available space (min 360px, max 50%)
+      const leftW = Math.round(Math.min(Math.max((w - pad * 2 - gap) * 0.49, 360), (w - pad * 2 - gap) * 0.51))
+      const rightW = Math.max(100, w - pad * 2 - gap - leftW)
+
+      if (overlay) {
+        overlay.style.display = 'block'
+        overlay.style.left = `${pad}px`
+        overlay.style.top = `${padY}px`
+        overlay.style.width = `${leftW}px`
+        overlay.style.height = `${contentH}px`
+      }
+
+      if (renderer && camera) {
+        const dom = renderer.domElement
+        dom.style.display = 'block'
+        dom.style.left = `${pad + leftW + gap}px`
+        dom.style.top = `${padY}px`
+        dom.style.width = `${rightW}px`
+        dom.style.height = `${contentH}px`
+        dom.style.borderRadius = '12px'
+        dom.style.border = '1px solid rgba(255,255,255,0.10)'
+        dom.style.background = '#080c14'
+
+        renderer.setSize(rightW, contentH, false)
+        camera.aspect = rightW / contentH
+        camera.updateProjectionMatrix()
+        camera.position.set(0, 7.5, 9.5)
+        if (this.controls) {
+          this.controls.target.set(0, -0.1, 0)
+          const fit = Math.min(2.2, Math.max(0.9, 1.15 / camera.aspect))
+          this.controls.setDistance(11.8 * fit)
+          this.controls.update()
+        }
+      }
+    } else if (mode === '3d') {
+      const fullW = Math.max(100, w - pad * 2)
+
+      if (overlay) {
+        overlay.style.display = 'none'
+      }
+
+      if (renderer && camera) {
+        const dom = renderer.domElement
+        dom.style.display = 'block'
+        dom.style.left = `${pad}px`
+        dom.style.top = `${padY}px`
+        dom.style.width = `${fullW}px`
+        dom.style.height = `${contentH}px`
+        dom.style.borderRadius = '12px'
+        dom.style.border = '1px solid rgba(255,255,255,0.10)'
+        dom.style.background = '#080c14'
+
+        renderer.setSize(fullW, contentH, false)
+        camera.aspect = fullW / contentH
+        camera.updateProjectionMatrix()
+        camera.position.set(0, 7.5, 9.5)
+        if (this.controls) {
+          this.controls.target.set(0, -0.1, 0)
+          const fit = Math.min(2.0, Math.max(0.9, 1.25 / camera.aspect))
+          this.controls.setDistance(11.5 * fit)
+          this.controls.update()
+        }
+      }
+    } else {
+      // 2D diagram takes entire area
+      const fullW = Math.max(100, w - pad * 2)
+
+      if (overlay) {
+        overlay.style.display = 'block'
+        overlay.style.left = `${pad}px`
+        overlay.style.top = `${padY}px`
+        overlay.style.width = `${fullW}px`
+        overlay.style.height = `${contentH}px`
+      }
+
+      if (renderer) {
+        renderer.domElement.style.display = 'none'
+      }
+    }
+
+    this.updatePillUI(mode)
+    this.drawOverlay()
+  }
+
+  private updatePillUI(activeMode: 'split' | '3d' | '2d'): void {
+    if (!this.pillEl) return
+    const btns = this.pillEl.querySelectorAll('button')
+    btns.forEach((btn) => {
+      const isAct = btn.dataset.mode === activeMode
+      btn.style.background = isAct ? 'rgba(34,211,238,0.22)' : 'transparent'
+      btn.style.color = isAct ? '#22d3ee' : '#94a3b8'
+      btn.style.border = isAct ? '1px solid rgba(34,211,238,0.45)' : '1px solid transparent'
+      btn.style.fontWeight = isAct ? '600' : '400'
+    })
   }
 
   /* ------------------------------------------------------------------ */
@@ -242,6 +367,10 @@ export class ElementaBandsElement extends HTMLElement {
     if (rot != null) {
       const v = rot.trim().toLowerCase()
       this.autoRotate = v !== 'false' && v !== '0'
+    }
+    const vm = this.getAttribute('data-view')
+    if (vm === 'split' || vm === '3d' || vm === '2d') {
+      this.viewMode = vm
     }
   }
 
@@ -934,6 +1063,10 @@ export class ElementaBandsElement extends HTMLElement {
     if (this.overlay && this.overlay.parentElement === this) {
       this.removeChild(this.overlay)
       this.overlay = null
+    }
+    if (this.pillEl && this.pillEl.parentElement === this) {
+      this.removeChild(this.pillEl)
+      this.pillEl = null
     }
     if (this.noteEl) {
       if (this.noteEl.parentElement === this) this.removeChild(this.noteEl)

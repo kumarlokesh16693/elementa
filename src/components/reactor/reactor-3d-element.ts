@@ -177,7 +177,7 @@ export class ElementaReactor3DElement extends HTMLElement {
       })
       const spacer = new Mesh(spacerGeo, spacerMat)
       spacer.position.set(0, yPos, 0)
-      this.coreGroup.add(spacer)
+      this.coreGroup?.add(spacer)
     })
 
     // Top nozzle plate

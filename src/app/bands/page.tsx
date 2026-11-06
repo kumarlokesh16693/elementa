@@ -92,7 +92,7 @@ function getInitialParams(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   const params = new URLSearchParams(window.location.search)
   const out: Record<string, string> = {}
-  for (const k of ['model', 't', 'a', 'delta', 'gap', 'fill', 'temp', 'rot']) {
+  for (const k of ['model', 't', 'a', 'delta', 'gap', 'fill', 'temp', 'rot', 'view']) {
     const v = params.get(k)
     if (v != null) out[k] = v
   }
@@ -119,6 +119,7 @@ const state = reactive({
   filling: Math.min(1.95, Math.max(0.05, num(initial, 'fill', 1))),
   temperature: Math.min(800, Math.max(0, num(initial, 'temp', 300))),
   rotate: initial.rot !== 'false' && initial.rot !== '0',
+  viewMode: (['split', '3d', '2d'].includes(initial.view ?? '') ? initial.view : 'split') as 'split' | '3d' | '2d',
   seed: 0,
 })
 
@@ -136,11 +137,21 @@ function syncUrl(): void {
   next.set('fill', String(state.filling))
   next.set('temp', String(Math.round(state.temperature)))
   next.set('rot', String(state.rotate))
+  next.set('view', state.viewMode)
   const url = `${window.location.pathname}?${next}`
   if (url !== lastUrl) {
     lastUrl = url
     window.history.replaceState(null, '', url)
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('elementa-bands-view-change', (e: any) => {
+    if (e.detail && ['split', '3d', '2d'].includes(e.detail) && state.viewMode !== e.detail) {
+      state.viewMode = e.detail
+      syncUrl()
+    }
+  })
 }
 
 function setModel(model: LatticeModel): void {
@@ -196,6 +207,7 @@ export default function BandsPage(): VNode {
     'data-fill': String(state.filling),
     'data-temp': String(state.temperature),
     'data-rot': state.rotate ? 'true' : 'false',
+    'data-view': state.viewMode,
     'data-reset': String(state.seed),
   }
 
@@ -259,7 +271,7 @@ export default function BandsPage(): VNode {
             'div',
             {
               class:
-                'pointer-events-none absolute bottom-2 right-2 flex flex-wrap items-center gap-2 font-mono text-[9.5px] text-zinc-500',
+                'pointer-events-none absolute bottom-3 right-3 flex flex-wrap items-center gap-2 font-mono text-[9.5px] text-zinc-500 bg-[#080c14]/80 px-2.5 py-1 rounded-md border border-white/10 backdrop-blur z-10',
             },
             Htag('span', { class: 'flex items-center gap-1' },
               Htag('span', { class: 'inline-block h-2 w-2 rounded-full bg-[#22d3ee]' }),
@@ -275,6 +287,37 @@ export default function BandsPage(): VNode {
         Htag(
           'div',
           { class: 'mt-2 flex flex-wrap items-center gap-2' },
+          Htag(
+            'div',
+            { class: 'flex items-center rounded-md border border-white/10 bg-white/[0.04] p-0.5 text-[11px]' },
+            Htag(
+              'button',
+              {
+                type: 'button',
+                onclick: () => { state.viewMode = 'split'; syncUrl() },
+                class: `rounded px-2 py-0.5 transition ${state.viewMode === 'split' ? 'bg-cyan-400/20 text-cyan-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'}`,
+              },
+              '◨ Split View',
+            ),
+            Htag(
+              'button',
+              {
+                type: 'button',
+                onclick: () => { state.viewMode = '3d'; syncUrl() },
+                class: `rounded px-2 py-0.5 transition ${state.viewMode === '3d' ? 'bg-cyan-400/20 text-cyan-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'}`,
+              },
+              '🌐 3D Surface',
+            ),
+            Htag(
+              'button',
+              {
+                type: 'button',
+                onclick: () => { state.viewMode = '2d'; syncUrl() },
+                class: `rounded px-2 py-0.5 transition ${state.viewMode === '2d' ? 'bg-cyan-400/20 text-cyan-300 font-semibold' : 'text-zinc-400 hover:text-zinc-200'}`,
+              },
+              '📊 2D Diagram',
+            ),
+          ),
           toggle(state.rotate ? 'Auto-rotate' : 'Auto-rotate off', state.rotate, () => {
             state.rotate = !state.rotate
             syncUrl()
@@ -290,13 +333,13 @@ export default function BandsPage(): VNode {
           ),
           Htag(
             'span',
-            { class: 'font-mono text-[10px] text-zinc-600' },
-            `drag to orbit · scroll to zoom · ${an.nBands} band${an.nBands > 1 ? 's' : ''}`,
+            { class: 'font-mono text-[10px] text-zinc-500' },
+            `drag to orbit · scroll to zoom`,
           ),
           Htag(
             'span',
-            { class: 'font-mono text-[10px] text-zinc-600' },
-            `${bandFill > 0.98 ? 'filled' : bandFill <= 0.02 ? 'empty' : `${Math.round(bandFill * 100)}% filled`} · ${MODEL_NOTE[state.model]}`,
+            { class: 'font-mono text-[10px] text-zinc-500' },
+            `· ${bandFill > 0.98 ? 'filled' : bandFill <= 0.02 ? 'empty' : `${Math.round(bandFill * 100)}% filled`} · ${MODEL_NOTE[state.model]}`,
           ),
         ),
       ),
