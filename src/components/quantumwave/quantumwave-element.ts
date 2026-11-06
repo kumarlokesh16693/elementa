@@ -14,6 +14,7 @@
 import {
   AmbientLight,
   BufferGeometry,
+  GridHelper,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -139,6 +140,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     this.initScene()
     this.readAttributes()
     this.rebuild(true)
+    this.updateLayout()
   }
 
   disconnectedCallback(): void {
@@ -149,6 +151,16 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     if (!this.renderer) return
     this.readAttributes()
     this.rebuild(false)
+  }
+
+  public resetCamera(): void {
+    if (!this.camera || !this.controls) return
+    this.camera.position.set(-1.0, 5.8, 12.0)
+    this.controls.target.set(0, 0.4, -0.6)
+    if (typeof (this.controls as any).updateSphericalFromCamera === 'function') {
+      (this.controls as any).updateSphericalFromCamera()
+    }
+    this.controls.update()
   }
 
   /* ------------------------------------------------------------------ */
@@ -168,16 +180,14 @@ export class ElementaQuantumWaveElement extends HTMLElement {
 
     const scene = new Scene()
     const camera = new PerspectiveCamera(45, 1, 0.05, 400)
-    camera.position.set(-1.0, 5.8, 12.0)
-
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
-    controls.target.set(0, 0.4, -0.6)
-    controls.update()
     this.scene = scene
     this.camera = camera
     this.controls = controls
+    this.resetCamera()
+    this.cameraReady = true
 
     scene.add(new AmbientLight(0xffffff, 0.7))
 
@@ -235,11 +245,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     resetBtn.onmouseenter = () => { resetBtn.style.color = '#f4f4f5'; resetBtn.style.borderColor = 'rgba(255,255,255,0.3)' }
     resetBtn.onmouseleave = () => { resetBtn.style.color = '#a1a1aa'; resetBtn.style.borderColor = 'rgba(255,255,255,0.15)' }
     resetBtn.onclick = () => {
-      if (this.camera && this.controls) {
-        this.camera.position.set(-1.0, 5.8, 12.0)
-        this.controls.target.set(0, 0.4, -0.6)
-        this.controls.update()
-      }
+      this.resetCamera()
     }
     this.appendChild(resetBtn)
     this.resetBtnEl = resetBtn
@@ -307,7 +313,6 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         camera.aspect = rightW / contentH
         camera.updateProjectionMatrix()
         if (this.controls) {
-          this.controls.target.set(0, 0.4, -0.6)
           this.controls.update()
         }
       }
@@ -334,7 +339,6 @@ export class ElementaQuantumWaveElement extends HTMLElement {
         camera.aspect = fullW / contentH
         camera.updateProjectionMatrix()
         if (this.controls) {
-          this.controls.target.set(0, 0.4, -0.6)
           this.controls.update()
         }
       }
@@ -480,6 +484,15 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       this.cachedEigenObs = null
     }
 
+    // Pre-seed row 0 if empty so the initial profile is rendered immediately on the first frame
+    if (this.histMax === 0) {
+      if (this.mode === 'eigen' && this.psi) {
+        this.pushRow((j) => (this.psi ? this.psi[j * STRIDE] : 0))
+      } else if (this.mode === 'packet' && this.packet) {
+        this.pushRow((j) => this.packet!.re[j * STRIDE])
+      }
+    }
+
     // draw once now — rAF may be throttled (hidden tab) so the figure shouldn't
     // wait for the first animate frame
     this.updateSurface(true)
@@ -515,12 +528,8 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const renderer = this.renderer
     if (!scene || !renderer) return
 
-    const camera = this.camera!
-    const controls = this.controls!
     if (!this.cameraReady) {
-      camera.position.set(-1.5, 5.2, 12.4)
-      controls.target.set(2.1, 0.7, -0.8)
-      controls.update()
+      this.resetCamera()
       this.cameraReady = true
     }
 
@@ -533,11 +542,22 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       scene.remove(this.group)
       this.releaseTree(this.group)
       this.group = null
+      this.ribbonMesh = null
     }
     const group = new Object3D()
     group.name = 'quantum-content'
     group.position.set(0, 0, 0) // Centered in the 3D viewport
     this.group = group
+
+    // Subtle coordinate orientation grid on the baseline
+    const gridHelper = new GridHelper(16, 16, '#38bdf8', '#1e293b')
+    gridHelper.position.set(0, -0.02, 0)
+    if (gridHelper.material) {
+      gridHelper.material.transparent = true
+      gridHelper.material.opacity = 0.4
+    }
+    gridHelper.frustumCulled = false
+    group.add(gridHelper)
 
     // --- Wavefunction History Waterfall Surface (persistent buffers) ---
     if (!this.surfMesh) {
@@ -557,6 +577,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       this.surfMesh = new Mesh(geo, mat)
     }
     const surf = this.surfMesh
+    surf.frustumCulled = false
     surf.position.set(0, 0, 0)
     group.add(surf)
 
@@ -623,6 +644,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const mat = new MeshBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.85 })
     mat.side = 'double'
     this.ribbonMesh = new Mesh(geo, mat)
+    this.ribbonMesh.frustumCulled = false
     group.add(this.ribbonMesh)
   }
 
@@ -720,14 +742,14 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const pos = this.surfPos
     const col = this.surfCol
     const max = this.histMax
-    const invMax = 1 / max
+    const invMax = max > 1e-9 ? 1 / max : 0
     const dz = WATER_D / (ROWS - 1)
     for (let r = 0; r < ROWS; r++) {
       const z = WATER_D / 2 - r * dz
       const rowOff = r * COLS
       for (let c = 0; c < COLS; c++) {
         const i = rowOff + c
-        const s = Math.max(-1, Math.min(1, this.hist[i] * invMax))
+        const s = invMax > 0 ? Math.max(-1, Math.min(1, this.hist[i] * invMax)) : 0
         const y = s * AMP_H
         const x = (-SURF_W / 2 + (c / (COLS - 1)) * SURF_W)
         pos[i * 3 + 0] = x
