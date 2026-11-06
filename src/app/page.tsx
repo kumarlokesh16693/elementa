@@ -44,6 +44,7 @@ const ORIGIN_KEYS = ORIGINS.map((origin) => origin.key)
 const SAVED_KEY = 'elementa:saved-views'
 
 const params = new URLSearchParams(window.location.search)
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent || navigator.platform || '')
 
 function intParam(name: string, min: number, max: number): number | null {
   const value = Number.parseInt(params.get(name) ?? '', 10)
@@ -424,7 +425,13 @@ function HomePage(): VNode {
       H('div', { class: 'flex items-center gap-2.5 shrink-0' },
         ElementaLogo({ size: 28 }),
         H('h1', { class: 'text-[17px] font-bold tracking-[0.22em] text-zinc-100 shrink-0 whitespace-nowrap' }, 'ELEM', H('span', { class: 'text-amber-400' }, 'E'), 'NTA'),
-        H('span', { class: 'hidden font-mono text-[10px] text-zinc-500 2xl:inline whitespace-nowrap' }, '· 118 elements · ⌘K')),
+        H('span', { class: 'hidden items-center gap-1.5 font-mono text-[10px] text-zinc-500 2xl:inline-flex whitespace-nowrap' },
+          H('span', null, '· 118 elements ·'),
+          H('kbd', {
+            class: 'inline-flex items-center rounded border border-white/15 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-zinc-400 shadow-sm',
+            title: IS_MAC ? 'Press ⌘K to search' : 'Press Ctrl+K to search',
+          }, IS_MAC ? '⌘ K' : 'Ctrl K'),
+        )),
       H('div', { class: 'relative shrink-0 w-36 sm:w-44 md:w-52' },
         H('input', {
           id: 'elementa-search', type: 'text', value: state.query,
