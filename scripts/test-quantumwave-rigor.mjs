@@ -15,6 +15,7 @@ import {
   observables,
   wellAnalyticEnergy,
   hoAnalyticEnergy,
+  WavefunctionFFT,
 } from '../src/lib/quantum.ts'
 
 console.log('🧪 Starting Quantum Wave Lab Rigor & Physics Verification Suite...\n')
@@ -348,6 +349,60 @@ test('Waterfall surface buffer calculations guarantee 100% finite values under h
     assert.ok(Number.isFinite(col[i]), `col[${i}] must be finite at histMax=1.0, got ${col[i]}`)
   }
   console.log(`    → Verified all ${pos.length + col.length} vertex attributes are 100% finite across zero and active states`)
+})
+
+// ---------------------------------------------------------
+// 10. In-Place Cooley-Tukey Radix-2 FFT & Parseval Unitarity
+// ---------------------------------------------------------
+test('WavefunctionFFT satisfies Parseval unitarity, auto-centers k=0, and resolves conjugate momentum peak', () => {
+  const fft = new WavefunctionFFT()
+  const N = 512
+  const grid = buildGrid({ system: 'ho', kappa: 0.6, width: 10, depth: 2, barrierWidth: 2 }, N)
+  const x0 = 0
+  const sigma = 1.6
+  const k0 = 2.4
+  const packet = makePacket(grid, x0, sigma, k0)
+
+  // Verify coordinate space norm
+  const coordNorm = discreteNorm(packet, grid.h)
+  assert.ok(Math.abs(coordNorm - 1.0) < 1e-12, `Coordinate norm must be 1.0, got ${coordNorm}`)
+
+  // Run Cooley-Tukey 512-point FFT
+  const res = fft.compute(packet.re, packet.im, grid.h)
+
+  // 1. Verify Parseval's theorem in discrete form: int |phi(k)|^2 dk == int |psi(x)|^2 dx == 1.0
+  let momentumNorm = 0
+  for (let m = 0; m < N; m++) {
+    momentumNorm += fft.power[m] * res.kDelta
+  }
+  assert.ok(
+    Math.abs(momentumNorm - 1.0) < 1e-7,
+    `Parseval momentum integral must equal 1.0, got ${momentumNorm}`
+  )
+
+  // 2. Verify zero momentum k=0 is placed in the center (index 256)
+  assert.strictEqual(fft.k[256], 0, 'k[256] must be exactly 0 (fftshifted center)')
+
+  // 3. Verify peak momentum matches k0 to within spectral resolution dk
+  assert.ok(
+    Math.abs(res.peakK - k0) <= res.kDelta,
+    `FFT peak momentum (${res.peakK}) must match packet k0 (${k0}) within dk=${res.kDelta}`
+  )
+
+  // 4. Verify momentum expectation value <p> matches packet k0
+  assert.ok(
+    Math.abs(res.meanK - k0) < 0.05,
+    `FFT expectation <p> (${res.meanK}) must match packet k0 (${k0})`
+  )
+
+  // 5. Verify Heisenberg uncertainty relation: delta x * delta p >= hbar / 2 (where hbar = 1)
+  const obs = observables(packet.re, packet.im, grid.x, grid.v, grid.h)
+  const product = obs.dx * res.deltaK
+  assert.ok(
+    product >= 0.499,
+    `Heisenberg product delta x * delta p (${product}) must satisfy >= 0.5`
+  )
+  console.log(`    → Parseval integral = ${momentumNorm.toFixed(6)} | Peak k = ${res.peakK.toFixed(3)} (exp ${k0}) | Heisenberg product = ${(product / 0.5).toFixed(3)} >= 1.0`)
 })
 
 console.log(`\n🎉 All ${passCount} tests passed with 100% rigorous verification!\n`)

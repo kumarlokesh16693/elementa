@@ -39,6 +39,7 @@ import {
   observables,
   regionProbs,
   renormalise,
+  WavefunctionFFT,
   type Grid,
   type Observables,
   type Packet,
@@ -81,6 +82,7 @@ export class ElementaQuantumWaveElement extends HTMLElement {
   // Pre-allocated performance buffers (avoids GC churn per frame)
   private zeroBuffer = new Float64Array(N_GRID)
   private rhoBuffer = new Float64Array(COLS)
+  private fft = new WavefunctionFFT()
 
   // solver state
   private grid: Grid | null = null
@@ -828,13 +830,11 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     ctx.clearRect(0, 0, w, h)
 
     const g = this.grid
-    const mL = 46
+    const isCompact = w < 480
+    const mL = isCompact ? 40 : 46
     const mR = 12
-    const mT = 38
-    const mB = 12
-    const mainH = h * 0.56
-    const probT = mT + mainH + 26
-    const probH = h - mB - probT
+    const mT = 34
+    const mB = 8
     const pw = w - mL - mR
 
     const xPx = (xv: number): number => mL + pw * (xv / g.boxHalf + 1) / 2
@@ -864,6 +864,23 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     const yMin = Math.min(0, vMin)
     const eSpan = Math.max(1e-6, yMax - yMin)
 
+    // Pre-calculate stats lines count for vertical budgeting
+    const statsLinesCount = 3
+    const lineSpacing = isCompact ? 12 : 14
+    const statsH = statsLinesCount * lineSpacing + 4
+
+    // Dynamic vertical budget for three synchronized scientific tiers:
+    // Tier 1: Energy & potential landscape V(x) with stationary / evolving wave
+    // Tier 2: Position space probability density |ψ(x)|²
+    // Tier 3: Momentum space probability density |ϕ(p)|² (Cooley-Tukey FFT)
+    const availH = Math.max(150, h - mT - statsH - mB)
+    const mainH = Math.max(85, Math.floor(availH * 0.48))
+    const stripsTotalH = availH - mainH
+    const stripH = Math.max(22, Math.floor((stripsTotalH - 18) / 2))
+
+    const strip1Y = mT + mainH + 10 + stripH // baseline for Position strip
+    const strip2Y = strip1Y + 12 + stripH   // baseline for Momentum strip
+
     const yPx = (ev: number): number => {
       const norm = (ev - yMin) / eSpan
       return mT + mainH * (1 - Math.max(-0.06, Math.min(1.06, norm)))
@@ -879,7 +896,6 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       : this.system === 'ho' ? 'Harmonic oscillator'
       : 'Rectangular barrier'
     const scale = evScale(this.lengthNm)
-    const isCompact = w < 480
     const subtitle =
       this.mode === 'eigen'
         ? (isCompact ? `n = ${this.nState}` : `State n=${this.nState} (phase rotation)`)
@@ -1039,16 +1055,18 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       ctx.stroke()
     }
 
-    // --- probability strip |ψ|² (reusing pre-allocated rhoBuffer) ---
-    const stripY = probT + probH
-    ctx.strokeStyle = 'rgba(148,163,184,0.25)'
+    // --- 1. Position Probability Strip |ψ(x)|² ---
+    ctx.strokeStyle = 'rgba(148,163,184,0.22)'
     ctx.beginPath()
-    ctx.moveTo(mL, probT)
-    ctx.lineTo(mL, stripY)
+    ctx.moveTo(mL, strip1Y - stripH)
+    ctx.lineTo(mL, strip1Y)
+    ctx.lineTo(mL + pw, strip1Y)
     ctx.stroke()
-    ctx.fillStyle = '#64748b'
+
+    ctx.fillStyle = '#fbbf24'
+    ctx.font = isCompact ? '8.5px ui-monospace, SFMono-Regular, Menlo, monospace' : '9.5px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.textAlign = 'right'
-    ctx.fillText('|ψ|²', mL - 6, probT + probH / 2)
+    ctx.fillText('|ψ|²', mL - 5, strip1Y - stripH / 2)
     ctx.textAlign = 'left'
 
     const rho = this.rhoBuffer
@@ -1060,22 +1078,139 @@ export class ElementaQuantumWaveElement extends HTMLElement {
       if (val > rhoMax) rhoMax = val
     }
     rhoMax = Math.max(rhoMax, 1e-24)
+
     ctx.beginPath()
-    ctx.moveTo(xPx(g.x[0]), stripY)
+    ctx.moveTo(xPx(g.x[0]), strip1Y)
     for (let c = 0; c < COLS; c++) {
       const px = xPx(g.x[c * STRIDE])
-      const py = stripY - (rho[c] / rhoMax) * (probH - 2)
+      const py = strip1Y - (rho[c] / rhoMax) * (stripH - 2)
       ctx.lineTo(px, py)
     }
-    ctx.lineTo(xPx(g.x[N_GRID - 1]), stripY)
+    ctx.lineTo(xPx(g.x[N_GRID - 1]), strip1Y)
     ctx.closePath()
-    ctx.fillStyle = 'rgba(251,191,36,0.55)'
+    ctx.fillStyle = 'rgba(251,191,36,0.38)'
     ctx.fill()
     ctx.strokeStyle = '#fbbf24'
     ctx.lineWidth = 1.2
     ctx.stroke()
 
-    // --- stats block with live numerical diagnostics ---
+    // Position Expectation & Uncertainty Tick
+    const meanX = mode === 'eigen' ? (this.cachedEigenObs?.meanX ?? 0) : (this.obs?.meanX ?? 0)
+    const dx = mode === 'eigen' ? (this.cachedEigenObs?.dx ?? 0) : (this.obs?.dx ?? 0)
+    const pxMeanX = xPx(meanX)
+    if (pxMeanX >= mL && pxMeanX <= mL + pw) {
+      ctx.strokeStyle = 'rgba(251,191,36,0.7)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(pxMeanX, strip1Y - stripH * 0.45)
+      ctx.lineTo(pxMeanX, strip1Y)
+      ctx.stroke()
+      if (!isCompact && w > 420) {
+        ctx.fillStyle = 'rgba(251,191,36,0.75)'
+        ctx.font = '8px ui-monospace, SFMono-Regular, Menlo, monospace'
+        ctx.textAlign = 'right'
+        ctx.fillText(`⟨x⟩=${meanX.toFixed(2)}`, mL + pw, strip1Y - stripH + 8)
+        ctx.textAlign = 'left'
+      }
+    }
+
+    // --- 2. Momentum Space Strip |ϕ(p)|² (Cooley–Tukey FFT) ---
+    ctx.strokeStyle = 'rgba(148,163,184,0.22)'
+    ctx.beginPath()
+    ctx.moveTo(mL, strip2Y - stripH)
+    ctx.lineTo(mL, strip2Y)
+    ctx.lineTo(mL + pw, strip2Y)
+    ctx.stroke()
+
+    ctx.fillStyle = '#c084fc'
+    ctx.font = isCompact ? '8.5px ui-monospace, SFMono-Regular, Menlo, monospace' : '9.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.textAlign = 'right'
+    ctx.fillText('|ϕ|²', mL - 5, strip2Y - stripH / 2)
+    ctx.textAlign = 'left'
+
+    // Compute FFT in real time (in-place Cooley-Tukey, 25 microseconds execution)
+    const psiRe = mode === 'eigen' && this.psi ? this.psi : (this.packet ? this.packet.re : this.zeroBuffer)
+    const psiIm = mode === 'eigen' ? null : (this.packet ? this.packet.im : null)
+    const fftRes = this.fft.compute(psiRe, psiIm, g.h)
+    const fftPower = this.fft.power
+    const fftK = this.fft.k
+
+    // Dynamic zoom for momentum window to capture active spectral peaks cleanly
+    const kDisp = Math.max(
+      3.2,
+      Math.min(
+        fftRes.kMax * 0.95,
+        Math.max(Math.abs(fftRes.peakK) * 2.2, (fftRes.deltaK || 1) * 4.5, 3.5),
+      ),
+    )
+    const kPx = (kv: number): number => mL + pw * ((kv + kDisp) / (2 * kDisp))
+
+    // Dotted zero-momentum axis (p = 0)
+    const p0X = kPx(0)
+    ctx.strokeStyle = 'rgba(192,132,252,0.30)'
+    ctx.setLineDash([2, 3])
+    ctx.beginPath()
+    ctx.moveTo(p0X, strip2Y - stripH)
+    ctx.lineTo(p0X, strip2Y)
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    // Axis limit numbers
+    ctx.fillStyle = 'rgba(148,163,184,0.6)'
+    ctx.font = '8px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.fillText(`-${kDisp.toFixed(1)}`, mL, strip2Y + 8)
+    ctx.textAlign = 'center'
+    ctx.fillText('p=0', p0X, strip2Y + 8)
+    ctx.textAlign = 'right'
+    ctx.fillText(`+${kDisp.toFixed(1)}`, mL + pw, strip2Y + 8)
+    ctx.textAlign = 'left'
+
+    // Plot momentum probability density |ϕ(k)|²
+    const pMax = Math.max(fftRes.maxPower, 1e-24)
+    ctx.beginPath()
+    ctx.moveTo(mL, strip2Y)
+    let started = false
+    for (let m = 0; m < N_GRID; m++) {
+      const km = fftK[m]
+      if (km < -kDisp || km > kDisp) continue
+      const px = kPx(km)
+      const py = strip2Y - (fftPower[m] / pMax) * (stripH - 2)
+      if (!started) {
+        ctx.lineTo(px, strip2Y)
+        ctx.lineTo(px, py)
+        started = true
+      } else {
+        ctx.lineTo(px, py)
+      }
+    }
+    ctx.lineTo(mL + pw, strip2Y)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(192,132,252,0.32)'
+    ctx.fill()
+    ctx.strokeStyle = '#c084fc'
+    ctx.lineWidth = 1.2
+    ctx.stroke()
+
+    // Momentum Expectation & Uncertainty Tick
+    const meanP = fftRes.meanK
+    const pxMeanP = kPx(meanP)
+    if (pxMeanP >= mL && pxMeanP <= mL + pw) {
+      ctx.strokeStyle = 'rgba(192,132,252,0.85)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(pxMeanP, strip2Y - stripH * 0.45)
+      ctx.lineTo(pxMeanP, strip2Y)
+      ctx.stroke()
+      if (!isCompact && w > 420) {
+        ctx.fillStyle = 'rgba(192,132,252,0.85)'
+        ctx.font = '8px ui-monospace, SFMono-Regular, Menlo, monospace'
+        ctx.textAlign = 'right'
+        ctx.fillText(`⟨p⟩=${meanP.toFixed(2)}`, mL + pw, strip2Y - stripH + 8)
+        ctx.textAlign = 'left'
+      }
+    }
+
+    // --- 3. Stats block with live numerical diagnostics & Heisenberg uncertainty ---
     const lines: string[] = []
     if (mode === 'eigen' && this.psi && this.grid) {
       const stateIdx = Math.min(EIGEN_LEVELS, this.nState) - 1
@@ -1116,11 +1251,11 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     }
 
     ctx.fillStyle = '#94a3b8'
-    ctx.font = isCompact ? '9.5px ui-monospace, SFMono-Regular, Menlo, monospace' : '11px ui-monospace, SFMono-Regular, Menlo, monospace'
-    let ly = h - mB - lines.length * (isCompact ? 13 : 15) - 6
+    ctx.font = isCompact ? '9px ui-monospace, SFMono-Regular, Menlo, monospace' : '10.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    let ly = strip2Y + 16
     for (const line of lines) {
       ctx.fillText(line, mL, ly)
-      ly += isCompact ? 13 : 15
+      ly += isCompact ? 12 : 14
     }
 
     // x ticks

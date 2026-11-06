@@ -512,3 +512,114 @@ export function barrierTransmission(energy: number, v0: number, width: number): 
   const sn = Math.sin(k * W)
   return 1 / (1 + ((v0 * v0 * sn * sn) / (4 * energy * (energy - v0))))
 }
+
+/**
+ * Zero-allocation In-Place Radix-2 Decimation-In-Time Cooley–Tukey FFT
+ * optimized for 512-point wavefunctions in quantum simulations.
+ *
+ * Automatically centers zero momentum k = 0 at index N / 2 = 256.
+ * Adheres to Parseval's theorem: ∫ |ψ(x)|² dx = ∫ |ϕ(k)|² dk = 1
+ */
+export class WavefunctionFFT {
+  public readonly n = 512
+  private readonly bitRev = new Uint16Array(512)
+  private readonly cosTable = new Float32Array(256)
+  private readonly sinTable = new Float32Array(256)
+
+  // Reusable persistent buffers (zero allocations inside the render loop)
+  public readonly k = new Float64Array(512)
+  public readonly re = new Float32Array(512)
+  public readonly im = new Float32Array(512)
+  public readonly power = new Float32Array(512)
+
+  constructor() {
+    for (let i = 0; i < 512; i++) {
+      let rev = 0
+      for (let j = 0; j < 9; j++) {
+        if ((i >> j) & 1) rev |= (1 << (8 - j))
+      }
+      this.bitRev[i] = rev
+    }
+    for (let k = 0; k < 256; k++) {
+      const angle = (-2 * Math.PI * k) / 512
+      this.cosTable[k] = Math.cos(angle)
+      this.sinTable[k] = Math.sin(angle)
+    }
+  }
+
+  /**
+   * Transforms coordinate wavefunction into momentum probability density |ϕ(k)|².
+   * Returns metadata including peak momentum, spread, and momentum scale.
+   */
+  public compute(
+    psiRe: ArrayLike<number>,
+    psiIm: ArrayLike<number> | null,
+    h: number,
+  ): { kMax: number; kDelta: number; peakK: number; maxPower: number; meanK: number; deltaK: number } {
+    const { n, bitRev, cosTable, sinTable, re, im, power, k } = this
+    const dk = (2 * Math.PI) / (n * h)
+    const kMax = Math.PI / h
+
+    // Populate k values and bit-reverse permutation with (-1)^j modulation for automatic fftshift
+    for (let i = 0; i < n; i++) {
+      k[i] = (i - n / 2) * dk
+      const rev = bitRev[i]
+      const sign = (i & 1) === 0 ? 1 : -1
+      re[rev] = psiRe[i] * sign
+      im[rev] = (psiIm ? psiIm[i] : 0) * sign
+    }
+
+    // Cooley–Tukey butterfly stages (9 stages for 512 points)
+    for (let half = 1; half < n; half <<= 1) {
+      const step = half << 1
+      const kStep = 256 / half
+      for (let i = 0; i < n; i += step) {
+        for (let j = 0; j < half; j++) {
+          const kIdx = j * kStep
+          const wr = cosTable[kIdx]
+          const wi = sinTable[kIdx]
+          const ur = re[i + j]
+          const ui = im[i + j]
+          const vr = re[i + j + half] * wr - im[i + j + half] * wi
+          const vi = re[i + j + half] * wi + im[i + j + half] * wr
+          re[i + j] = ur + vr
+          im[i + j] = ui + vi
+          re[i + j + half] = ur - vr
+          im[i + j + half] = ui - vi
+        }
+      }
+    }
+
+    // Discrete Parseval normalization:
+    // int |phi(k)|^2 dk = sum_m |re_m * normFactor|^2 * dk = h sum_j |psi_j|^2 = 1
+    const normFactor = h / Math.sqrt(2 * Math.PI)
+    let maxPower = 0
+    let peakK = 0
+    let sumK = 0
+    let sumK2 = 0
+    let totalMass = 0
+
+    for (let m = 0; m < n; m++) {
+      const pr = re[m] * normFactor
+      const pi = im[m] * normFactor
+      const p = pr * pr + pi * pi
+      power[m] = p
+      const km = k[m]
+      if (p > maxPower) {
+        maxPower = p
+        peakK = km
+      }
+      const mass = p * dk
+      sumK += km * mass
+      sumK2 += km * km * mass
+      totalMass += mass
+    }
+
+    const meanK = totalMass > 1e-12 ? sumK / totalMass : 0
+    const varK = totalMass > 1e-12 ? Math.max(0, sumK2 / totalMass - meanK * meanK) : 0
+    const deltaK = Math.sqrt(varK)
+
+    return { kMax, kDelta: dk, peakK, maxPower, meanK, deltaK }
+  }
+}
+
