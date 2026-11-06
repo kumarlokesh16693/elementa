@@ -128,9 +128,63 @@ export class ElementaBecElement extends HTMLElement {
 
   private state: BecState
   private params: BecParams
-  private mode: BecViewMode = 'combined'
-  private speed = 5
-  private paused = false
+  private _mode: BecViewMode = 'combined'
+  private _speed = 2
+  private _paused = false
+
+  get mode(): BecViewMode {
+    return this._mode
+  }
+  set mode(m: BecViewMode) {
+    if (['density', 'phase', 'combined'].includes(m)) {
+      this._mode = m
+    }
+  }
+
+  get speed(): number {
+    return this._speed
+  }
+  set speed(s: number | string) {
+    const val = typeof s === 'string' ? parseInt(s, 10) : s
+    if (Number.isFinite(val) && val >= 1 && val <= 30) {
+      this._speed = val
+    }
+  }
+
+  get paused(): boolean {
+    return this._paused
+  }
+  set paused(p: boolean | string) {
+    this._paused = p === true || p === 'true'
+  }
+
+  get g(): number {
+    return this.params.g
+  }
+  set g(val: number | string) {
+    const num = typeof val === 'string' ? parseFloat(val) : val
+    if (Number.isFinite(num) && num >= 0) this.params.g = num
+  }
+
+  get omega(): number {
+    return this.params.omega
+  }
+  set omega(val: number | string) {
+    const num = typeof val === 'string' ? parseFloat(val) : val
+    if (Number.isFinite(num) && num >= 0) this.params.omega = num
+  }
+
+  get trap(): TrapType {
+    return this.params.trap
+  }
+  set trap(t: TrapType) {
+    if (['harmonic', 'double-well', 'ring', 'toroidal'].includes(t)) {
+      if (this.params.trap !== t) {
+        this.params.trap = t
+        initGroundState(this.state, this.params, 50)
+      }
+    }
+  }
 
   private rafId = 0
   private resizeObserver: ResizeObserver | null = null
@@ -175,8 +229,8 @@ export class ElementaBecElement extends HTMLElement {
     this.ctx = this.canvas.getContext('2d', { alpha: false })
     this.updateFromAttributes()
 
-    // Initialize ground state
-    initGroundState(this.state, this.params, 260)
+    // Initialize ground state with optimized 50-step relaxation (~350ms)
+    initGroundState(this.state, this.params, 50)
 
     // Canvas click to imprint vortex
     this.canvas.addEventListener('click', this.handleCanvasClick)
@@ -233,7 +287,7 @@ export class ElementaBecElement extends HTMLElement {
     ) {
       if (this.params.trap !== trapAttr) {
         this.params.trap = trapAttr
-        initGroundState(this.state, this.params, 220)
+        initGroundState(this.state, this.params, 50)
       }
     }
 
@@ -302,7 +356,7 @@ export class ElementaBecElement extends HTMLElement {
       this.params.trap = 'toroidal'
     }
 
-    initGroundState(this.state, this.params, 260)
+    initGroundState(this.state, this.params, 50)
 
     if (preset === 'giant-vortex') {
       addVortex(this.state, 0, 0, 1)
@@ -364,17 +418,25 @@ export class ElementaBecElement extends HTMLElement {
       if (now - this.lastStatsEmit > 120) {
         this.lastStatsEmit = now
         const obs = computeObservables(this.state, this.params)
+        const updateDetail = {
+          observables: obs,
+          fps: this.fps,
+          stepsPerSec: this.stepsPerSec,
+          time: this.state.time,
+          stirring: this.state.stirSteps > 0,
+        }
+        this.dispatchEvent(
+          new CustomEvent('becupdate', {
+            bubbles: true,
+            composed: true,
+            detail: updateDetail,
+          }),
+        )
         this.dispatchEvent(
           new CustomEvent('bec-update', {
             bubbles: true,
             composed: true,
-            detail: {
-              observables: obs,
-              fps: this.fps,
-              stepsPerSec: this.stepsPerSec,
-              time: this.state.time,
-              stirring: this.state.stirSteps > 0,
-            },
+            detail: updateDetail,
           }),
         )
       }

@@ -55,7 +55,7 @@ const state = reactive({
   g: 5.0,
   omega: 0.0,
   trap: 'harmonic' as TrapType,
-  speed: 5,
+  speed: 2,
   paused: false,
 
   // Observables
@@ -230,7 +230,7 @@ export default function BecPage(): VNode {
                 {
                   key: p.key,
                   type: 'button',
-                  onClick: () => applyPreset(p.key),
+                  onclick: () => applyPreset(p.key),
                   class: `flex items-baseline justify-between rounded-md border px-2.5 py-1.5 text-left transition ${
                     state.preset === p.key
                       ? 'border-cyan-400/60 bg-cyan-400/15 text-cyan-200 font-medium'
@@ -264,7 +264,7 @@ export default function BecPage(): VNode {
                 {
                   key: m,
                   type: 'button',
-                  onClick: () => {
+                  onclick: () => {
                     state.mode = m
                     const el = getBecElement()
                     if (el) el.setViewMode(m)
@@ -307,7 +307,7 @@ export default function BecPage(): VNode {
               max: '20',
               step: '0.5',
               value: String(state.g),
-              onInput: (e: Event) => {
+              oninput: (e: Event) => {
                 state.g = parseFloat((e.target as HTMLInputElement).value)
               },
               class: 'w-full accent-cyan-400 cursor-pointer',
@@ -335,7 +335,7 @@ export default function BecPage(): VNode {
               max: '0.90',
               step: '0.01',
               value: String(state.omega),
-              onInput: (e: Event) => {
+              oninput: (e: Event) => {
                 state.omega = parseFloat((e.target as HTMLInputElement).value)
               },
               class: 'w-full accent-amber-400 cursor-pointer',
@@ -363,7 +363,7 @@ export default function BecPage(): VNode {
               max: '20',
               step: '1',
               value: String(state.speed),
-              onInput: (e: Event) => {
+              oninput: (e: Event) => {
                 state.speed = parseInt((e.target as HTMLInputElement).value, 10)
               },
               class: 'w-full accent-zinc-400 cursor-pointer',
@@ -389,7 +389,7 @@ export default function BecPage(): VNode {
                 {
                   key: t,
                   type: 'button',
-                  onClick: () => {
+                  onclick: () => {
                     state.trap = t
                     const el = getBecElement()
                     if (el) el.reset()
@@ -422,7 +422,7 @@ export default function BecPage(): VNode {
               'button',
               {
                 type: 'button',
-                onClick: () => {
+                onclick: () => {
                   state.paused = !state.paused
                 },
                 class: `rounded-md border px-2.5 py-1.5 text-center font-medium transition ${
@@ -437,7 +437,7 @@ export default function BecPage(): VNode {
               'button',
               {
                 type: 'button',
-                onClick: () => {
+                onclick: () => {
                   const el = getBecElement()
                   if (el) {
                     el.stir(200)
@@ -454,7 +454,7 @@ export default function BecPage(): VNode {
               'button',
               {
                 type: 'button',
-                onClick: () => {
+                onclick: () => {
                   const el = getBecElement()
                   if (el) el.addVortexAt(0, 0, 1)
                 },
@@ -467,7 +467,7 @@ export default function BecPage(): VNode {
               'button',
               {
                 type: 'button',
-                onClick: () => {
+                onclick: () => {
                   const el = getBecElement()
                   if (el) el.addVortexAt(0, 0, -1)
                 },
@@ -481,7 +481,7 @@ export default function BecPage(): VNode {
             'button',
             {
               type: 'button',
-              onClick: () => {
+              onclick: () => {
                 const el = getBecElement()
                 if (el) el.reset(state.preset)
               },
@@ -555,7 +555,7 @@ export default function BecPage(): VNode {
             'div',
             {
               class: 'flex items-center justify-between cursor-pointer select-none',
-              onClick: () => {
+              onclick: () => {
                 state.theoryExpanded = !state.theoryExpanded
               },
             },
