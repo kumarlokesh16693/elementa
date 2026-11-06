@@ -48,29 +48,43 @@ export function stepPointKinetics(
   dt: number,
 ): { nNext: number; precursorsNext: number[]; period: number } {
   const Lambda = lambdaPromptUs * 1e-6 // Convert microseconds to seconds
-  const promptTerm = ((rho - beta) / Lambda) * n
-  let delayedSource = 0
+  if (!(Lambda > 0) || !(dt > 0)) return { nNext: n, precursorsNext: [...precursors], period: 9999 }
 
-  for (let i = 0; i < 6; i++) {
-    delayedSource += DELAYED_GROUPS_U235[i].decayConstantLambda_i * precursors[i]
-  }
+  // Forward Euler is unstable for frame-sized steps because the prompt mode
+  // has a characteristic rate of (beta-rho)/Lambda. Substep against the
+  // fastest point-kinetics rate so the explicit update remains well behaved.
+  const promptRate = Math.abs((rho - beta) / Lambda)
+  const fastestDelayedRate = Math.max(...DELAYED_GROUPS_U235.map((group) => group.decayConstantLambda_i))
+  const maxRate = Math.max(promptRate, fastestDelayedRate)
+  const substeps = Math.max(1, Math.ceil((dt * maxRate) / 0.25))
+  const h = dt / substeps
+  let nCurrent = Math.max(1e-7, n)
+  let precursorCurrent = precursors.slice(0, DELAYED_GROUPS_U235.length)
+  while (precursorCurrent.length < DELAYED_GROUPS_U235.length) precursorCurrent.push(1e-7)
+  let initialRate = 0
 
-  const dn = (promptTerm + delayedSource) * dt
-  const nNext = Math.max(1e-7, n + dn)
+  for (let step = 0; step < substeps; step++) {
+    const nAtStepStart = nCurrent
+    let delayedSource = 0
+    for (let i = 0; i < DELAYED_GROUPS_U235.length; i++) {
+      delayedSource += DELAYED_GROUPS_U235[i].decayConstantLambda_i * precursorCurrent[i]
+    }
+    const dnPerSecond = ((rho - beta) / Lambda) * nAtStepStart + delayedSource
+    if (step === 0) initialRate = dnPerSecond
+    nCurrent = Math.max(1e-7, nAtStepStart + dnPerSecond * h)
 
-  const precursorsNext: number[] = []
-  for (let i = 0; i < 6; i++) {
-    const beta_i = DELAYED_GROUPS_U235[i].fractionBeta_i
-    const lambda_i = DELAYED_GROUPS_U235[i].decayConstantLambda_i
-    const dCi = ((beta_i / Lambda) * n - lambda_i * precursors[i]) * dt
-    precursorsNext.push(Math.max(1e-7, precursors[i] + dCi))
+    for (let i = 0; i < DELAYED_GROUPS_U235.length; i++) {
+      const group = DELAYED_GROUPS_U235[i]
+      const betaI = group.fractionBeta_i * (beta / TOTAL_BETA_U235)
+      const dCiPerSecond = (betaI / Lambda) * nAtStepStart - group.decayConstantLambda_i * precursorCurrent[i]
+      precursorCurrent[i] = Math.max(1e-7, precursorCurrent[i] + dCiPerSecond * h)
+    }
   }
 
   // Reactor period T (e-folding time): T = n / (dn/dt)
-  const rateOfChange = dn / Math.max(dt, 1e-4)
-  const period = Math.abs(rateOfChange) > 1e-6 ? n / rateOfChange : 9999.0
+  const period = Math.abs(initialRate) > 1e-6 ? n / initialRate : 9999.0
 
-  return { nNext, precursorsNext, period }
+  return { nNext: nCurrent, precursorsNext: precursorCurrent, period }
 }
 
 /**
@@ -89,11 +103,15 @@ export function stepXenonTransient(
   const dI = (LAMBDA_I135 * fluxNormalized - LAMBDA_I135 * I_rel) * dt
   const I_next = Math.max(0, I_rel + dI)
 
-  // dXe/dt = yield_factor * fluxNorm + lambda_I * I_rel - (lambda_Xe + sigma_Xe * flux) * Xe_rel
-  // Scaled normalized equilibrium values:
-  const production = 0.05 * fluxNormalized + 0.95 * I_rel
+  // Normalize the physical production terms by the nominal Xe-135 inventory.
+  // Direct Xe and I-135 decay contributions use the tabulated fission yields.
+  const totalXeYield = YIELD_I135 + YIELD_XE135
+  const directFraction = YIELD_XE135 / totalXeYield
+  const iodineFraction = YIELD_I135 / totalXeYield
   const destruction = (LAMBDA_XE135 + SIGMA_A_XE135 * flux) / (LAMBDA_XE135 + SIGMA_A_XE135 * NOMINAL_THERMAL_FLUX)
-  const dXe = 2.0e-5 * (production - destruction * Xe_rel) * dt
+  const nominalXeRemovalRate = LAMBDA_XE135 + SIGMA_A_XE135 * NOMINAL_THERMAL_FLUX
+  const production = directFraction * fluxNormalized + iodineFraction * I_rel
+  const dXe = nominalXeRemovalRate * (production - destruction * Xe_rel) * dt
   const Xe_next = Math.max(0, Xe_rel + dXe)
 
   // Nominal equilibrium Xenon worth at 100% power is roughly -2800 pcm
@@ -103,7 +121,8 @@ export function stepXenonTransient(
 }
 
 /**
- * Solves core thermal-hydraulics: fuel temperature, coolant temperature, steam pressure, turbine MWe
+ * Produces an illustrative lumped thermal response and power conversion estimate.
+ * This is not a plant-specific thermal-hydraulics or steam-cycle solver.
  */
 export function stepThermalHydraulics(
   preset: ReactorPreset,
@@ -140,7 +159,9 @@ export function stepThermalHydraulics(
   // Secondary Steam Cycle & Turbine
   const thermalEfficiency = preset.electricPowerMWe / preset.thermalPowerMWth
   const electricMWe = Math.max(0, heatGen * thermalEfficiency)
-  const steamPressMPa = Math.max(0.1, (preset.operatingPressureMPa * 0.45) * Math.min(1.0, coolantOutC / preset.outletTempC))
+  // Pressure is held at a nominal display value: computing it credibly requires
+  // a phase-specific coolant/steam-cycle model that this lumped demo lacks.
+  const steamPressMPa = preset.type === 'BWR' ? preset.operatingPressureMPa : preset.operatingPressureMPa * 0.44
   const turbineRpm = Math.min(1800, Math.max(0, 1800 * (electricMWe / preset.electricPowerMWe)))
 
   return {

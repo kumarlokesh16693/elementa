@@ -23,6 +23,7 @@ import {
   realYlm,
   type RealOrbital,
 } from '@/lib/orbital'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 import { surfaceNets } from './surfaceNets'
 
 const POS_HEX = '#fbbf24'
@@ -82,15 +83,18 @@ export class ElementaOrbitalViewElement extends HTMLElement {
   public gridN = 84
   public autoRotate = true
   public speed = 1
+  public fx = false
+  private glow: GlowPost | null = null
 
   static get observedAttributes(): string[] {
-    return ['data-n', 'data-l', 'data-m', 'data-sin', 'data-zeff', 'data-mode', 'data-iso', 'data-rotate', 'data-speed']
+    return ['data-n', 'data-l', 'data-m', 'data-sin', 'data-zeff', 'data-mode', 'data-iso', 'data-rotate', 'data-speed', 'data-fx']
   }
 
   connectedCallback(): void {
     if (this.renderer) return
     this.initScene()
     this.rebuild()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -99,8 +103,29 @@ export class ElementaOrbitalViewElement extends HTMLElement {
 
   attributeChangedCallback(): void {
     this.readAttributes()
+    this.syncGlow()
     if (this.isConnected && this.renderer) {
       this.scheduleRebuild()
+    }
+  }
+
+  /** Build or release the glow post chain for the orbital view. */
+  private syncGlow(): void {
+    const renderer = this.renderer
+    const scene = this.scene
+    const camera = this.camera
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && renderer && scene && camera) {
+        // Slightly higher threshold than the wave lab: orbitals have large
+        // bright surfaces, and we only want the crest lines to bloom.
+        this.glow = createGlowPost(renderer, scene, camera, {
+          bloomThreshold: 0.42,
+          bloomIntensity: 0.5,
+        })
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
   }
 
@@ -126,6 +151,10 @@ export class ElementaOrbitalViewElement extends HTMLElement {
     }
     if (this.hasAttribute('data-speed')) {
       this.speed = Number(this.getAttribute('data-speed'))
+    }
+    if (this.hasAttribute('data-fx')) {
+      const t = (this.getAttribute('data-fx') ?? '').trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
     }
   }
 
@@ -178,6 +207,9 @@ export class ElementaOrbitalViewElement extends HTMLElement {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
+      if (this.glow?.active) {
+        this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
+      }
     }
     resize()
     this.ro = new ResizeObserver(resize)
@@ -198,7 +230,8 @@ export class ElementaOrbitalViewElement extends HTMLElement {
         this.camera.position.z = t.z + ((dx * sin + dz * cos) / len) * radius
       }
       if (this.controls) this.controls.update()
-      renderer.render(scene, camera)
+      if (this.glow?.active) this.glow.render()
+      else renderer.render(scene, camera)
     }
     tick()
   }
@@ -399,6 +432,10 @@ export class ElementaOrbitalViewElement extends HTMLElement {
   private teardown(): void {
     if (this.computeTimer) clearTimeout(this.computeTimer)
     cancelAnimationFrame(this.raf)
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

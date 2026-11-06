@@ -28,6 +28,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from '@nexus/3d'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 import {
   VIBRATIONAL_MOLECULES,
   type AtomVibration,
@@ -59,6 +60,8 @@ export class ElementaVibrationElement extends HTMLElement {
 
   private phase: number = 0
   private lastTime: number = performance.now()
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return [
@@ -69,6 +72,7 @@ export class ElementaVibrationElement extends HTMLElement {
       'data-paused',
       'data-show-vectors',
       'data-style',
+      'data-fx',
     ]
   }
 
@@ -77,6 +81,7 @@ export class ElementaVibrationElement extends HTMLElement {
     this.setupScene()
     this.buildMolecule()
     this.startLoop()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -89,6 +94,7 @@ export class ElementaVibrationElement extends HTMLElement {
     const prevStyle = this.styleMode
 
     this.readAttributes()
+    this.syncGlow()
 
     if (this.isConnected) {
       if (prevMol !== this.currentMoleculeId || prevStyle !== this.styleMode) {
@@ -96,6 +102,18 @@ export class ElementaVibrationElement extends HTMLElement {
       } else if (prevMode !== this.currentModeIndex) {
         this.updateModeVectors()
       }
+    }
+  }
+
+  /** Build or release the glow post chain for the molecule view. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
   }
 
@@ -107,6 +125,11 @@ export class ElementaVibrationElement extends HTMLElement {
     this.isPaused = this.getAttribute('data-paused') === '1' || this.getAttribute('data-paused') === 'true'
     this.showVectors = this.getAttribute('data-show-vectors') !== '0' && this.getAttribute('data-show-vectors') !== 'false'
     this.styleMode = (this.getAttribute('data-style') as any) || 'ball-stick'
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
   }
 
   private setupScene(): void {
@@ -156,6 +179,9 @@ export class ElementaVibrationElement extends HTMLElement {
           this.camera.aspect = w / h
           this.camera.updateProjectionMatrix()
           this.renderer.setSize(w, h)
+          if (this.glow?.active) {
+            this.glow.setSize(this.renderer.domElement.width, this.renderer.domElement.height)
+          }
         }
       }
     })
@@ -331,7 +357,8 @@ export class ElementaVibrationElement extends HTMLElement {
 
       if (this.controls) this.controls.update()
       if (this.renderer && this.scene && this.camera) {
-        this.renderer.render(this.scene, this.camera)
+        if (this.glow?.active) this.glow.render(dt)
+        else this.renderer.render(this.scene, this.camera)
       }
 
       this.animId = requestAnimationFrame(loop)
@@ -402,6 +429,10 @@ export class ElementaVibrationElement extends HTMLElement {
     if (this.animId !== null) {
       cancelAnimationFrame(this.animId)
       this.animId = null
+    }
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect()

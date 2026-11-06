@@ -1556,7 +1556,7 @@ export const HBAR_GEV_S = 6.582119569e-25  // hbar in GeV * s
 
 /**
  * Relativistic Breit–Wigner cross section formula:
- *   σ(E) = [12π (ħc)² / M²] * [ (Γ_in * Γ_out) / ((E² - M²)² + M² Γ²) ]
+ *   σ(E) = 12π (ħc)² Γ_in Γ_out / ((E² - M²)² + M² Γ²)
  *
  * @param E Center of mass energy in GeV
  * @param M Resonance mass in GeV
@@ -1576,7 +1576,7 @@ export function relativisticBreitWigner(
   const numerator = 12 * Math.PI * HBAR_C2_NB_GEV2 * GammaIn * GammaOut
   const s = E * E
   const M2 = M * M
-  const denominator = M2 * ((s - M2) * (s - M2) + M2 * Gamma * Gamma)
+  const denominator = (s - M2) * (s - M2) + M2 * Gamma * Gamma
   return numerator / denominator
 }
 

@@ -25,6 +25,7 @@ import {
   Scene,
   WebGLRenderer,
 } from '@nexus/3d'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 import {
   envelopeZeroSin,
   firstOrderSin,
@@ -63,6 +64,8 @@ export class ElementaOpticsElement extends HTMLElement {
   private overlay: HTMLCanvasElement | null = null
   private noteEl: HTMLElement | null = null
   private ready = false
+  private glow: GlowPost | null = null
+  private fx = false
 
   // field geometry (persistent; updated per frame)
   private surfMesh: Mesh | null = null
@@ -94,7 +97,7 @@ export class ElementaOpticsElement extends HTMLElement {
   static get observedAttributes(): string[] {
     return [
       'data-system', 'data-lambda', 'data-a', 'data-d', 'data-n',
-      'data-l', 'data-speed', 'data-anim', 'data-reset', 'data-view',
+      'data-l', 'data-speed', 'data-anim', 'data-reset', 'data-view', 'data-fx',
     ]
   }
 
@@ -104,6 +107,7 @@ export class ElementaOpticsElement extends HTMLElement {
     this.readAttributes()
     this.updateLayout()
     this.rebuild(true)
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -113,8 +117,21 @@ export class ElementaOpticsElement extends HTMLElement {
   attributeChangedCallback(): void {
     if (!this.ready) return
     this.readAttributes()
+    this.syncGlow()
     this.updateLayout()
     this.rebuild(false)
+  }
+
+  /** Build or release the glow post chain for the tank. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -231,7 +248,8 @@ export class ElementaOpticsElement extends HTMLElement {
         this.lastTime = now
         this.advance(dt)
         if (this.controls) this.controls.update()
-        r.render(s, c)
+        if (this.glow?.active) this.glow.render(dt)
+        else r.render(s, c)
       }
       this.lastTime = 0
       this.raf = requestAnimationFrame(tick)
@@ -283,6 +301,7 @@ export class ElementaOpticsElement extends HTMLElement {
         renderer.setSize(rightW, contentH, false)
         camera.aspect = rightW / contentH
         camera.updateProjectionMatrix()
+        if (this.glow?.active) this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
         camera.position.set(0, 8.6, 10.4)
         if (this.controls) {
           this.controls.target.set(0, 0, -0.6)
@@ -312,6 +331,7 @@ export class ElementaOpticsElement extends HTMLElement {
         renderer.setSize(fullW, contentH, false)
         camera.aspect = fullW / contentH
         camera.updateProjectionMatrix()
+        if (this.glow?.active) this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
         camera.position.set(0, 8.6, 10.4)
         if (this.controls) {
           this.controls.target.set(0, 0, -0.6)
@@ -377,6 +397,11 @@ export class ElementaOpticsElement extends HTMLElement {
     this.nSlits = Math.min(10, Math.max(1, Math.round(p('n', this.nSlits))))
     this.screenL = Math.min(4, Math.max(0.2, p('l', this.screenL)))
     this.speed = Math.min(3, Math.max(0, p('speed', this.speed)))
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
     const a = this.getAttribute('data-anim')
     if (a != null) {
       const t = a.trim().toLowerCase()
@@ -905,6 +930,10 @@ export class ElementaOpticsElement extends HTMLElement {
     cancelAnimationFrame(this.raf)
     this.ready = false
     this.lastGeoSig = ''
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

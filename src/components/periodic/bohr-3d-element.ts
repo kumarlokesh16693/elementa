@@ -21,6 +21,7 @@ import {
 } from '@nexus/3d'
 import { getElement } from '@/lib/periodic'
 import type { ElementData } from '@/lib/periodic/types'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 
 interface SpinEntry {
   group: Object3D
@@ -146,9 +147,11 @@ export class ElementaBohr3DElement extends HTMLElement {
   public speed = 1
   public paused = false
   public massA: number | null = null
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
-    return ['data-z', 'data-accent', 'data-speed', 'data-paused', 'data-a', 'data-mass']
+    return ['data-z', 'data-accent', 'data-speed', 'data-paused', 'data-a', 'data-mass', 'data-fx']
   }
 
   connectedCallback(): void {
@@ -156,6 +159,7 @@ export class ElementaBohr3DElement extends HTMLElement {
     this.readAttrs()
     this.initScene()
     this.rebuild()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -164,8 +168,21 @@ export class ElementaBohr3DElement extends HTMLElement {
 
   attributeChangedCallback(): void {
     this.readAttrs()
+    this.syncGlow()
     if (this.isConnected && this.renderer) {
       this.rebuild()
+    }
+  }
+
+  /** Build or release the glow post chain for the Bohr atom. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
   }
 
@@ -176,6 +193,11 @@ export class ElementaBohr3DElement extends HTMLElement {
     if (this.hasAttribute('data-paused')) this.paused = this.getAttribute('data-paused') === 'true'
     if (this.hasAttribute('data-a')) this.massA = Number(this.getAttribute('data-a'))
     else if (this.hasAttribute('data-mass')) this.massA = Number(this.getAttribute('data-mass'))
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
   }
 
   private initScene(): void {
@@ -242,6 +264,9 @@ export class ElementaBohr3DElement extends HTMLElement {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
+      if (this.glow?.active) {
+        this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
+      }
     }
     resize()
     this.ro = new ResizeObserver(resize)
@@ -259,7 +284,8 @@ export class ElementaBohr3DElement extends HTMLElement {
         this.atomGroup.rotation.y += 0.25 * dt
       }
       controls.update()
-      renderer.render(scene, camera)
+      if (this.glow?.active) this.glow.render(dt)
+      else renderer.render(scene, camera)
     }
     tick()
   }
@@ -288,6 +314,10 @@ export class ElementaBohr3DElement extends HTMLElement {
 
   private teardown(): void {
     cancelAnimationFrame(this.raf)
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

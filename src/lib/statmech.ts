@@ -333,8 +333,9 @@ export function accumulateObservables(
   const eVar = Math.max(0, state.sumE2 - state.sumE * state.sumE)
   const cv = (N_SPINS / T2) * eVar
 
-  // Magnetic susceptibility χ = (N / T) * (<m^2> - <|m|>^2)
-  const mVar = Math.max(0, state.sumM2 - state.sumAbsM * state.sumAbsM)
+  // Fluctuation relation for the finite-system magnetization (per spin).
+  // Use <m>, not <|m|>; the latter suppresses fluctuations across both phases.
+  const mVar = Math.max(0, state.sumM2 - state.sumM * state.sumM)
   const chi = (N_SPINS / T) * mVar
 
   // Record hysteresis trajectory (keep latest 300 points)
@@ -347,8 +348,8 @@ export function accumulateObservables(
     m,
     absM,
     e,
-    cv: Math.min(500.0, cv),
-    chi: Math.min(1000.0, chi),
+    cv,
+    chi,
     staggeredM: stagM,
     sweepsCount: state.sweepsCount,
   }

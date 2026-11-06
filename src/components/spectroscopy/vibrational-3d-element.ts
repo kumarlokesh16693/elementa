@@ -25,6 +25,7 @@ import {
 } from '@nexus/3d'
 import { getSpectroscopyMoleculeById } from '@/lib/spectroscopy/database'
 import type { SpectroscopyMolecule, VibrationalMode } from '@/lib/spectroscopy/types'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 
 export class ElementaVibrational3DElement extends HTMLElement {
   private renderer: WebGLRenderer | null = null
@@ -41,6 +42,8 @@ export class ElementaVibrational3DElement extends HTMLElement {
   private currentMode: VibrationalMode | null = null
   private molecule: SpectroscopyMolecule | null = null
   private animTime = 0
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return [
@@ -50,12 +53,14 @@ export class ElementaVibrational3DElement extends HTMLElement {
       'data-speed',
       'data-style',
       'data-rotate',
+      'data-fx',
     ]
   }
 
   connectedCallback(): void {
     this.setupScene()
     this.setupMolecule()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -64,8 +69,25 @@ export class ElementaVibrational3DElement extends HTMLElement {
 
   attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
     if (oldVal === newVal) return
+    if (name === 'data-fx') {
+      const t = (newVal ?? '').trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+      this.syncGlow()
+    }
     if (this.isConnected && this.renderer) {
       this.setupMolecule()
+    }
+  }
+
+  /** Build or release the glow post chain. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
   }
 
@@ -132,6 +154,10 @@ export class ElementaVibrational3DElement extends HTMLElement {
       cancelAnimationFrame(this.animId)
       this.animId = null
     }
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
 
@@ -162,6 +188,9 @@ export class ElementaVibrational3DElement extends HTMLElement {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height)
+    if (this.glow?.active) {
+      this.glow.setSize(this.renderer.domElement.width, this.renderer.domElement.height)
+    }
   }
 
   private setupMolecule(): void {
@@ -313,7 +342,8 @@ export class ElementaVibrational3DElement extends HTMLElement {
 
       this.controls?.update()
       if (this.renderer && this.scene && this.camera) {
-        this.renderer.render(this.scene, this.camera)
+        if (this.glow?.active) this.glow.render()
+        else this.renderer.render(this.scene, this.camera)
       }
     }
     loop()

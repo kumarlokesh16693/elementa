@@ -27,6 +27,7 @@ import {
 } from '@nexus/3d'
 import { getCrystalStructureById } from '@/lib/crystallography/database'
 import type { CrystalStructure } from '@/lib/crystallography/types'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 
 export class ElementaCrystal3DElement extends HTMLElement {
   private renderer: WebGLRenderer | null = null
@@ -37,6 +38,8 @@ export class ElementaCrystal3DElement extends HTMLElement {
   private millerPlaneMesh: Mesh | null = null
   private animId: number | null = null
   private resizeObserver: ResizeObserver | null = null
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return [
@@ -49,12 +52,14 @@ export class ElementaCrystal3DElement extends HTMLElement {
       'data-show-plane',
       'data-rotate',
       'data-speed',
+      'data-fx',
     ]
   }
 
   connectedCallback(): void {
     this.setupScene()
     this.renderLattice()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -63,8 +68,33 @@ export class ElementaCrystal3DElement extends HTMLElement {
 
   attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null): void {
     if (oldVal === newVal) return
+    if (name === 'data-fx') {
+      const t = (newVal ?? '').trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+      this.syncGlow()
+    }
     if (this.isConnected && this.renderer) {
       this.renderLattice()
+    }
+  }
+
+  /** Build or release the glow post chain for the lattice view. */
+  private syncGlow(): void {
+    const renderer = this.renderer
+    const scene = this.scene
+    const camera = this.camera
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && renderer && scene && camera) {
+        // Lattice spheres + bonds are strongly lit; a higher threshold keeps
+        // the glow on atom highlights instead of washing the whole cell.
+        this.glow = createGlowPost(renderer, scene, camera, {
+          bloomThreshold: 0.55,
+          bloomIntensity: 0.45,
+        })
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
   }
 
@@ -131,6 +161,10 @@ export class ElementaCrystal3DElement extends HTMLElement {
       cancelAnimationFrame(this.animId)
       this.animId = null
     }
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
 
@@ -161,6 +195,9 @@ export class ElementaCrystal3DElement extends HTMLElement {
     this.camera.aspect = width / height
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(width, height)
+    if (this.glow?.active) {
+      this.glow.setSize(this.renderer.domElement.width, this.renderer.domElement.height)
+    }
   }
 
   private startAnimationLoop(): void {
@@ -176,7 +213,8 @@ export class ElementaCrystal3DElement extends HTMLElement {
 
       this.controls?.update()
       if (this.renderer && this.scene && this.camera) {
-        this.renderer.render(this.scene, this.camera)
+        if (this.glow?.active) this.glow.render()
+        else this.renderer.render(this.scene, this.camera)
       }
     }
     loop()

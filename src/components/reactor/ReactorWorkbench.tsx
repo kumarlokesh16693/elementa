@@ -23,6 +23,14 @@ function H(tag: any, props?: any, ...children: any[]): VNode {
   return h(tag, props, ...children) as VNode
 }
 
+function equilibriumPrecursors(preset = REACTOR_PRESETS[0]): number[] {
+  const Lambda = preset.promptNeutronLifetimeUs * 1e-6
+  return DELAYED_GROUPS_U235.map((group) => {
+    const betaI = group.fractionBeta_i * (preset.totalBeta / TOTAL_BETA_U235)
+    return betaI / (Lambda * group.decayConstantLambda_i)
+  })
+}
+
 // Module-level reactive singleton
 export const reactorStore = reactive<ReactorState>({
   presetId: REACTOR_PRESETS[0].id,
@@ -37,9 +45,7 @@ export const reactorStore = reactive<ReactorState>({
   reactivityPcm: 0.0,
   reactivityDollars: 0.0,
   reactorPeriodSeconds: 9999.0,
-  precursors: DELAYED_GROUPS_U235.map(
-    (g) => (g.fractionBeta_i / (REACTOR_PRESETS[0].promptNeutronLifetimeUs * 1e-6 * g.decayConstantLambda_i)) * 1.0
-  ),
+  precursors: equilibriumPrecursors(REACTOR_PRESETS[0]),
   iodine135Rel: 100.0,
   xenon135Rel: 100.0,
   xenonReactivityPcm: -2800.0,
@@ -182,6 +188,8 @@ export function ReactorWorkbench(): VNode {
     : 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
 
   return H('div', { class: 'flex h-full flex-col overflow-hidden bg-[#070a12]' },
+    H('div', { class: 'border-b border-amber-400/20 bg-amber-400/[0.06] px-4 py-1.5 text-[10px] leading-relaxed text-amber-100/70' },
+      'Educational, lumped-parameter demonstration. Kinetics use U-235 six-group data as an approximation; thermal, feedback, and visual outputs are not plant predictions or safety analysis.'),
     // Top Control Room Toolbar
     H('div', { class: 'flex flex-wrap items-center justify-between gap-2.5 border-b border-white/10 bg-[#0a0f18] px-4 py-2 z-10' },
       // Preset Selector
@@ -192,12 +200,14 @@ export function ReactorWorkbench(): VNode {
           onChange: (e: any) => {
             const p = getPresetById(e.target.value)
             store.presetId = p.id
+            store.precursors = equilibriumPrecursors(p)
             store.coolantInletTempC = p.inletTempC
             store.coolantOutletTempC = p.outletTempC
           },
           onchange: (e: any) => {
             const p = getPresetById(e.target.value)
             store.presetId = p.id
+            store.precursors = equilibriumPrecursors(p)
             store.coolantInletTempC = p.inletTempC
             store.coolantOutletTempC = p.outletTempC
           },
@@ -362,7 +372,7 @@ export function ReactorWorkbench(): VNode {
               // Cherenkov HUD overlay badge
               H('div', { class: 'absolute bottom-3 left-3 rounded-lg border border-cyan-400/30 bg-black/70 px-3 py-1.5 font-mono text-[10.5px] backdrop-blur-[2px] flex items-center gap-2' },
                 H('span', { class: 'h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping' }),
-                H('span', { class: 'text-cyan-300 font-bold' }, 'Cherenkov Luminescence:'),
+                H('span', { class: 'text-cyan-300 font-bold' }, 'Schematic Cherenkov glow:'),
                 H('span', { class: 'text-zinc-300' }, `${(store.cherenkovIntensity * 100).toFixed(0)}% Intensity`),
               ),
             )
@@ -410,7 +420,7 @@ export function ReactorWorkbench(): VNode {
                     ),
                   ),
                   H('p', { class: 'mt-3 text-[10.5px] text-zinc-400 leading-relaxed' },
-                    'Negative temperature coefficients provide inherent passive safety: if core temperature rises, resonance absorption in ²³⁸U immediately removes reactivity, naturally stabilizing the chain reaction without human intervention.',
+                    'Simplified reactivity feedback demonstration. Real temperature feedback and safety response depend on reactor-specific design and coupled neutronic and thermal-hydraulic behavior; this model is not a safety analysis.',
                   ),
                 ),
               ),

@@ -63,6 +63,7 @@ const state = reactive({
   mode: 'surface' as 'surface' | 'cloud',
   isoT: 0.7,
   rotate: true,
+  fx: typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('fx') === 'on',
   zeemanLabOpen: initialParams.zeeman,
   zeemanPreset: initialParams.preset,
 })
@@ -71,6 +72,8 @@ function syncUrl(z: number): void {
   if (typeof window !== 'undefined') {
     const url = new URL(window.location.href)
     url.searchParams.set('z', String(z))
+    if (state.fx) url.searchParams.set('fx', 'on')
+    else url.searchParams.delete('fx')
     if (state.zeemanLabOpen) {
       url.searchParams.set('zeeman', '1')
     } else {
@@ -303,6 +306,27 @@ export default function OrbitalLabPage(): VNode {
                 state.rotate ? '❚❚ rotate' : '▶ rotate',
               ),
               H(
+                'button',
+                {
+                  type: 'button',
+                  onclick: () => {
+                    state.fx = !state.fx
+                    if (typeof window !== 'undefined') {
+                      const url = new URL(window.location.href)
+                      if (state.fx) url.searchParams.set('fx', 'on')
+                      else url.searchParams.delete('fx')
+                      window.history.replaceState(null, '', url.toString())
+                    }
+                  },
+                  class: `rounded-md border px-2.5 py-1 text-[11px] transition ${
+                    state.fx
+                      ? 'border-fuchsia-400/50 bg-fuchsia-400/10 text-fuchsia-300'
+                      : 'border-white/10 text-zinc-500 hover:text-zinc-300'
+                  }`,
+                },
+                state.fx ? '✨ glow fx' : '✧ glow fx',
+              ),
+              H(
                 'div',
                 { class: 'flex items-center gap-1.5' },
                 H('span', { class: 'font-mono text-[9.5px] text-zinc-500' }, 'iso'),
@@ -342,6 +366,7 @@ export default function OrbitalLabPage(): VNode {
               'data-iso': isoRaw,
               'data-rotate': String(state.rotate),
               'data-speed': '1',
+              'data-fx': state.fx ? 'on' : 'off',
             }),
             H(
               'div',

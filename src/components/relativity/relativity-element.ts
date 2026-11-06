@@ -20,6 +20,7 @@ import {
   SphereGeometry,
   WebGLRenderer,
 } from '@nexus/3d'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 import { C, lorentzFactor } from '@/lib/relativity'
 
 const CARRIAGE_COLOR = '#475569'
@@ -68,9 +69,11 @@ export class ElementaRelativityElement extends HTMLElement {
   public showTrail = true
   public showRods = true
   public animating = true
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
-    return ['data-beta', 'data-proper-length', 'data-show-trail', 'data-show-rods', 'data-animate']
+    return ['data-beta', 'data-proper-length', 'data-show-trail', 'data-show-rods', 'data-animate', 'data-fx']
   }
 
   connectedCallback(): void {
@@ -78,6 +81,7 @@ export class ElementaRelativityElement extends HTMLElement {
     this.initScene()
     this.readAttributes()
     this.build()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -86,7 +90,20 @@ export class ElementaRelativityElement extends HTMLElement {
 
   attributeChangedCallback(): void {
     this.readAttributes()
+    this.syncGlow()
     if (this.isConnected && this.renderer) this.build()
+  }
+
+  /** Build or release the glow post chain for the spacetime scene. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
   }
 
   private readAttributes(): void {
@@ -112,6 +129,11 @@ export class ElementaRelativityElement extends HTMLElement {
     this.showTrail = b('show-trail', true)
     this.showRods = b('show-rods', true)
     this.animating = b('animate', true)
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
   }
 
   private initScene(): void {
@@ -169,6 +191,9 @@ export class ElementaRelativityElement extends HTMLElement {
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       this.drawDiagram()
+      if (this.glow?.active) {
+        this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
+      }
     }
     resize()
     this.ro = new ResizeObserver(resize)
@@ -180,7 +205,8 @@ export class ElementaRelativityElement extends HTMLElement {
       this.lastTime = now
       this.advance(dt)
       if (this.controls) this.controls.update()
-      renderer.render(scene, camera)
+      if (this.glow?.active) this.glow.render(dt)
+      else renderer.render(scene, camera)
     }
     this.raf = requestAnimationFrame(tick)
   }
@@ -528,6 +554,10 @@ export class ElementaRelativityElement extends HTMLElement {
 
   private teardown(): void {
     cancelAnimationFrame(this.raf)
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

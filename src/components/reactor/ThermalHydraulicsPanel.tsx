@@ -1,7 +1,7 @@
 /**
  * Nuclear Thermal-Hydraulics & Electric Turbine Generator Schematic
- * Displays primary loop (RPV -> Steam Generator -> Coolant Pump)
- * and secondary cycle (Steam Turbine -> Generator MWe -> Condenser).
+ * Illustrative lumped thermal response and generic power-cycle schematic.
+ * The displayed cycle is not specific to every reactor preset.
  */
 
 import { h, type VNode } from 'nexus-framework'
@@ -40,7 +40,7 @@ export function ThermalHydraulicsPanel({
     // Flow Rate Controller Strip
     H('div', { class: 'flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 bg-[#0c1220] p-2.5' },
       H('div', { class: 'flex items-center gap-2' },
-        H('span', { class: 'font-mono text-zinc-400 font-bold text-[11px]' }, 'PRIMARY COOLANT FLOW RATE:'),
+        H('span', { class: 'font-mono text-zinc-400 font-bold text-[11px]' }, 'MODEL COOLANT FLOW:'),
         H('input', {
           type: 'range',
           min: '20',
@@ -54,7 +54,7 @@ export function ThermalHydraulicsPanel({
         H('span', { class: 'font-mono text-sky-300 font-bold' }, `${flowRatePct.toFixed(0)}% Nominal`),
       ),
       H('div', { class: 'font-mono text-[11px] text-zinc-400' },
-        `Pressure: ${preset.operatingPressureMPa.toFixed(1)} MPa | Efficiency: ${thermalEfficiency.toFixed(1)}%`,
+        `Nominal pressure: ${preset.operatingPressureMPa.toFixed(1)} MPa | Estimated efficiency: ${thermalEfficiency.toFixed(1)}%`,
       ),
     ),
 
@@ -73,7 +73,7 @@ export function ThermalHydraulicsPanel({
               H('span', { class: 'text-amber-400 font-bold' }, `${thermalPowerMWth.toFixed(1)} MWth`),
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
-              H('span', { class: 'text-zinc-500' }, 'Peak Fuel Centerline:'),
+              H('span', { class: 'text-zinc-500' }, 'Illustrative Fuel Temperature:'),
               H('span', { class: `${fuelTempAvgC > 1200 ? 'text-rose-400' : 'text-zinc-200'} font-bold` }, `${fuelTempAvgC.toFixed(1)} °C`),
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
@@ -95,21 +95,21 @@ export function ThermalHydraulicsPanel({
       H('div', { class: 'rounded-xl border border-white/10 bg-[#090d16] p-3 flex flex-col justify-between' },
         H('div', null,
           H('div', { class: 'flex items-center justify-between border-b border-white/10 pb-2 mb-2' },
-            H('span', { class: 'font-bold text-zinc-200' }, '♨️ Steam Generator Loop'),
-            H('span', { class: 'rounded bg-sky-500/20 px-1.5 py-0.5 font-mono text-[9.5px] text-sky-300 font-bold' }, 'SECONDARY'),
+            H('span', { class: 'font-bold text-zinc-200' }, '♨️ Illustrative Power-Cycle Loop'),
+            H('span', { class: 'rounded bg-sky-500/20 px-1.5 py-0.5 font-mono text-[9.5px] text-sky-300 font-bold' }, 'GENERIC'),
           ),
           H('div', { class: 'space-y-2 font-mono text-[11px]' },
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
-              H('span', { class: 'text-zinc-500' }, 'Main Steam Pressure:'),
+              H('span', { class: 'text-zinc-500' }, 'Nominal Steam Pressure Estimate:'),
               H('span', { class: 'text-sky-300 font-bold' }, `${steamPressMPa.toFixed(2)} MPa`),
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
-              H('span', { class: 'text-zinc-500' }, 'Steam Temperature:'),
+              H('span', { class: 'text-zinc-500' }, 'Illustrative Steam Temperature:'),
               H('span', { class: 'text-zinc-200 font-bold' }, `${Math.min(290, coolantOutC - 15).toFixed(1)} °C`),
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
               H('span', { class: 'text-zinc-500' }, 'Boiler Circulation:'),
-              H('span', { class: 'text-emerald-400 font-bold' }, 'Recirculating U-Tube'),
+              H('span', { class: 'text-emerald-400 font-bold' }, 'Generic cycle schematic'),
             ),
             H('div', { class: 'flex justify-between p-1.5 rounded bg-black/40 border border-white/5' },
               H('span', { class: 'text-zinc-500' }, 'Condenser Vacuum:'),
@@ -118,7 +118,7 @@ export function ThermalHydraulicsPanel({
           ),
         ),
         H('div', { class: 'mt-2 text-[10px] text-zinc-500 font-mono' },
-          'Isolates radioactive primary water from turbine steam',
+          'Cycle details vary by reactor design; this diagram is illustrative',
         ),
       ),
 

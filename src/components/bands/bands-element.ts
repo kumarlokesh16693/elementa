@@ -42,6 +42,7 @@ import {
   type FermiContourPoint,
   type LatticeModel,
 } from '@/lib/bands'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 
 const R_WORLD = 3.3
 const Y_WORLD = 3.05
@@ -82,11 +83,13 @@ export class ElementaBandsElement extends HTMLElement {
   private path: BandPath | null = null
   private contour: FermiContourPoint[] = []
   private lastSig = ''
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return [
       'data-model', 'data-t', 'data-a', 'data-delta', 'data-gap',
-      'data-fill', 'data-temp', 'data-rot', 'data-reset', 'data-view',
+      'data-fill', 'data-temp', 'data-rot', 'data-reset', 'data-view', 'data-fx',
     ]
   }
 
@@ -95,6 +98,7 @@ export class ElementaBandsElement extends HTMLElement {
     this.initScene()
     this.readAttributes()
     this.rebuild(true)
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -104,8 +108,24 @@ export class ElementaBandsElement extends HTMLElement {
   attributeChangedCallback(): void {
     if (!this.ready) return
     this.readAttributes()
+    this.syncGlow()
     this.updateLayout()
     this.rebuild(false)
+  }
+
+  /** Build or release the glow post chain for the band surface. */
+  private syncGlow(): void {
+    const renderer = this.renderer
+    const scene = this.scene
+    const camera = this.camera
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && renderer && scene && camera) {
+        this.glow = createGlowPost(renderer, scene, camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -219,7 +239,8 @@ export class ElementaBandsElement extends HTMLElement {
         this.lastTime = now
         this.advance(dt)
         if (this.controls) this.controls.update()
-        r.render(s, c)
+        if (this.glow?.active) this.glow.render(dt)
+        else r.render(s, c)
       }
       this.lastTime = 0
       this.raf = requestAnimationFrame(tick)
@@ -271,6 +292,7 @@ export class ElementaBandsElement extends HTMLElement {
         renderer.setSize(rightW, contentH, false)
         camera.aspect = rightW / contentH
         camera.updateProjectionMatrix()
+        if (this.glow?.active) this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
         camera.position.set(0, 7.5, 9.5)
         if (this.controls) {
           this.controls.target.set(0, -0.1, 0)
@@ -300,6 +322,7 @@ export class ElementaBandsElement extends HTMLElement {
         renderer.setSize(fullW, contentH, false)
         camera.aspect = fullW / contentH
         camera.updateProjectionMatrix()
+        if (this.glow?.active) this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
         camera.position.set(0, 7.5, 9.5)
         if (this.controls) {
           this.controls.target.set(0, -0.1, 0)
@@ -367,6 +390,11 @@ export class ElementaBandsElement extends HTMLElement {
     if (rot != null) {
       const v = rot.trim().toLowerCase()
       this.autoRotate = v !== 'false' && v !== '0'
+    }
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
     }
     const vm = this.getAttribute('data-view')
     if (vm === 'split' || vm === '3d' || vm === '2d') {
@@ -1044,6 +1072,10 @@ export class ElementaBandsElement extends HTMLElement {
     cancelAnimationFrame(this.raf)
     this.ready = false
     this.lastSig = ''
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

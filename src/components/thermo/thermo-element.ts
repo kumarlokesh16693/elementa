@@ -18,6 +18,7 @@ import {
   Scene,
   WebGLRenderer,
 } from '@nexus/3d'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 import {
   computeCycle,
   pressure,
@@ -69,12 +70,14 @@ export class ElementaThermoElement extends HTMLElement {
   public showParticles = true
   public autoCycle = false
   public cyclePhase = 0 // 0..1 animation through cycle
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return [
       'data-n', 'data-t', 'data-v', 'data-gamma', 'data-cycle', 'data-th',
       'data-tc', 'data-cutoff', 'data-show-cycle', 'data-show-particles',
-      'data-auto-cycle', 'data-cycle-phase',
+      'data-auto-cycle', 'data-cycle-phase', 'data-fx',
     ]
   }
 
@@ -83,6 +86,7 @@ export class ElementaThermoElement extends HTMLElement {
     this.initScene()
     this.readAttributes()
     this.build()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -91,7 +95,20 @@ export class ElementaThermoElement extends HTMLElement {
 
   attributeChangedCallback(): void {
     this.readAttributes()
+    this.syncGlow()
     if (this.isConnected && this.renderer) this.build()
+  }
+
+  /** Build or release the glow post chain for the engine. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
   }
 
   private readAttributes(): void {
@@ -132,6 +149,11 @@ export class ElementaThermoElement extends HTMLElement {
     this.showParticles = b('show-particles', true)
     this.autoCycle = b('auto-cycle', false)
     this.cyclePhase = p('cycle-phase', this.cyclePhase)
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
   }
 
   private initScene(): void {
@@ -189,6 +211,9 @@ export class ElementaThermoElement extends HTMLElement {
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       this.drawPVDiagram()
+      if (this.glow?.active) {
+        this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
+      }
     }
     resize()
     this.ro = new ResizeObserver(resize)
@@ -197,7 +222,8 @@ export class ElementaThermoElement extends HTMLElement {
     const tick = () => {
       this.raf = requestAnimationFrame(tick)
       if (this.controls) this.controls.update()
-      renderer.render(scene, camera)
+      if (this.glow?.active) this.glow.render()
+      else renderer.render(scene, camera)
     }
     tick()
   }
@@ -588,6 +614,10 @@ export class ElementaThermoElement extends HTMLElement {
 
   private teardown(): void {
     cancelAnimationFrame(this.raf)
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

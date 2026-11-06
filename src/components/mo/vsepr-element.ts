@@ -31,6 +31,7 @@ import {
   getCovalentRadius,
   type Molecule3DGeometry,
 } from '@/lib/periodic/vsepr'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 
 export class ElementaVseprElement extends HTMLElement {
   private renderer: WebGLRenderer | null = null
@@ -40,6 +41,8 @@ export class ElementaVseprElement extends HTMLElement {
   private molGroup: Object3D | null = null
   private animId: number | null = null
   private resizeObserver: ResizeObserver | null = null
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return [
@@ -53,12 +56,14 @@ export class ElementaVseprElement extends HTMLElement {
       'data-show-poly',
       'data-style',
       'data-rotate',
+      'data-fx',
     ]
   }
 
   connectedCallback(): void {
     this.setupScene()
     this.updateMolecule()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -68,6 +73,25 @@ export class ElementaVseprElement extends HTMLElement {
   attributeChangedCallback(): void {
     if (this.isConnected) {
       this.updateMolecule()
+    }
+    // keep fx in sync on any attribute change
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+      this.syncGlow()
+    }
+  }
+
+  /** Build or release the glow post chain. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
   }
 
@@ -119,6 +143,9 @@ export class ElementaVseprElement extends HTMLElement {
           this.camera.aspect = cr.width / cr.height
           this.camera.updateProjectionMatrix()
           this.renderer.setSize(cr.width, cr.height)
+          if (this.glow?.active) {
+            this.glow.setSize(this.renderer.domElement.width, this.renderer.domElement.height)
+          }
         }
       }
     })
@@ -132,7 +159,8 @@ export class ElementaVseprElement extends HTMLElement {
       }
       if (this.controls) this.controls.update()
       if (this.renderer && this.scene && this.camera) {
-        this.renderer.render(this.scene, this.camera)
+        if (this.glow?.active) this.glow.render()
+        else this.renderer.render(this.scene, this.camera)
       }
       this.animId = requestAnimationFrame(animate)
     }
@@ -321,6 +349,10 @@ export class ElementaVseprElement extends HTMLElement {
     if (this.animId != null) {
       cancelAnimationFrame(this.animId)
       this.animId = null
+    }
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
     }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect()

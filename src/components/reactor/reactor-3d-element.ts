@@ -1,7 +1,7 @@
 /**
  * 3D Nuclear Reactor Fuel Core & Control Rod Assembly WebGL Component
  * Renders fuel rod array, moveable control rod cluster,
- * fuel pellet thermal heat gradients, and real-time Cherenkov blue radiation emission.
+ * illustrative fuel temperature colors, and a schematic blue glow effect.
  */
 
 import {

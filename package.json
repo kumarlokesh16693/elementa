@@ -1,12 +1,13 @@
 {
   "name": "@nexus/app-workspace-elementa",
   "version": "1.0.0",
-  "description": "ELEMENTA — research-grade interactive periodic table, orbital lab, molecular orbital builder, Segrè chart of the nuclides and the Daedalus re-entry flight sim. Plain Vite build: Tailwind-only styling, zero UI component libraries, aliased onto nexus-framework and @nexus/3d.",
+  "description": "ELEMENTA — interactive scientific visualization and teaching labs for the periodic table, orbitals, molecular orbitals, nuclides, and atmospheric-entry modeling. Built with Vite, Tailwind, nexus-framework, and @nexus/3d.",
   "type": "module",
   "scripts": {
     "dev": "vite --port 3520",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && vite build"
+    "build": "npm run typecheck && vite build",
+    "test": "node --experimental-strip-types scripts/test-statmech-rigor.mjs && node --experimental-strip-types scripts/test-particle-rigor.mjs && node --experimental-strip-types scripts/test-quantumwave-rigor.mjs && node --experimental-strip-types scripts/test-orbitals-rigor.mjs"
   },
   "dependencies": {
     "nexus-framework": "file:../..",

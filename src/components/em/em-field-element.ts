@@ -39,6 +39,7 @@ import {
   type ParticleState,
   type Vec3,
 } from '@/lib/em'
+import { createGlowPost, type GlowPost } from '@/lib/postfx'
 
 const ARROW_HEAD_LEN = 0.14
 const ARROW_HEAD_WID = 0.07
@@ -159,11 +160,13 @@ export class ElementaEMFieldElement extends HTMLElement {
   private arrowScale = 0.5
   private gridN = 8 // samples per axis
   private gridExtent = 4.0
+  private glow: GlowPost | null = null
+  private fx = false
 
   static get observedAttributes(): string[] {
     return ['data-preset', 'data-charge', 'data-current', 'data-loops', 'data-radius',
       'data-frequency', 'data-e0', 'data-particle-q', 'data-particle-m',
-      'data-particle-vx', 'data-particle-vy', 'data-particle-vz', 'data-time', 'data-scale']
+      'data-particle-vx', 'data-particle-vy', 'data-particle-vz', 'data-time', 'data-scale', 'data-fx']
   }
 
   connectedCallback(): void {
@@ -171,6 +174,7 @@ export class ElementaEMFieldElement extends HTMLElement {
     this.initScene()
     this.readAttributes()
     this.build()
+    this.syncGlow()
   }
 
   disconnectedCallback(): void {
@@ -179,7 +183,20 @@ export class ElementaEMFieldElement extends HTMLElement {
 
   attributeChangedCallback(): void {
     this.readAttributes()
+    this.syncGlow()
     if (this.isConnected && this.renderer) this.build()
+  }
+
+  /** Build or release the glow post chain for the field scene. */
+  private syncGlow(): void {
+    if (this.fx) {
+      if ((!this.glow || !this.glow.active) && this.renderer && this.scene && this.camera) {
+        this.glow = createGlowPost(this.renderer, this.scene, this.camera)
+      }
+    } else if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
   }
 
   private readAttributes(): void {
@@ -210,6 +227,11 @@ export class ElementaEMFieldElement extends HTMLElement {
     }
     const scale = p('scale', this.scale)
     this.scale = scale > 0 ? scale : 1
+    const fxRaw = this.getAttribute('data-fx')
+    if (fxRaw != null) {
+      const t = fxRaw.trim().toLowerCase()
+      this.fx = t !== 'false' && t !== '0' && t !== 'off'
+    }
   }
 
   private initScene(): void {
@@ -254,6 +276,9 @@ export class ElementaEMFieldElement extends HTMLElement {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
+      if (this.glow?.active) {
+        this.glow.setSize(renderer.domElement.width, renderer.domElement.height)
+      }
     }
     resize()
     this.ro = new ResizeObserver(resize)
@@ -262,7 +287,8 @@ export class ElementaEMFieldElement extends HTMLElement {
     const tick = () => {
       this.raf = requestAnimationFrame(tick)
       if (this.controls) this.controls.update()
-      renderer.render(scene, camera)
+      if (this.glow?.active) this.glow.render()
+      else renderer.render(scene, camera)
     }
     tick()
   }
@@ -738,6 +764,10 @@ export class ElementaEMFieldElement extends HTMLElement {
 
   private teardown(): void {
     cancelAnimationFrame(this.raf)
+    if (this.glow) {
+      this.glow.dispose()
+      this.glow = null
+    }
     if (this.ro) {
       this.ro.disconnect()
       this.ro = null

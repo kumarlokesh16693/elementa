@@ -213,7 +213,7 @@ export function XenonPitPlot({
         'PHYSICS TRAP: THE XENON-135 DEAD TIME',
       ),
       H('p', null,
-        'When reactor power is abruptly dropped, microscopic neutron burnout of ¹³⁵Xe halts immediately. However, the large inventory of ¹³⁵I continues decaying into ¹³⁵Xe with its 6.57-hour half-life. Peak negative reactivity occurs ~10 hours later. Operators must NEVER override this "xenon pit" by withdrawing control rods beyond safety margins.',
+        'After a power reduction, ¹³⁵I can continue decaying into ¹³⁵Xe while neutron absorption changes, temporarily increasing xenon concentration. The peak time and reactivity depend on prior operating history, flux, and fuel composition. This illustrative shutdown curve is not operating guidance or a control-rod limit.',
       ),
     ),
   )

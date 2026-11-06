@@ -832,6 +832,8 @@ export default function StatMechPage(): VNode {
             { class: 'text-[10px] font-semibold uppercase tracking-wider text-zinc-400' },
             'Live Thermodynamic Observables',
           ),
+          H('div', { class: 'text-[9px] leading-relaxed text-zinc-500' },
+            'Fluctuation values use exponentially smoothed Monte Carlo samples. They are live estimates, not converged equilibrium measurements.'),
           H(
             'div',
             { class: 'grid grid-cols-2 gap-2' },
@@ -854,9 +856,9 @@ export default function StatMechPage(): VNode {
               tint: '#a78bfa',
             }),
             StatCard({
-              label: 'Susceptibility χ',
+              label: 'Susceptibility estimate χ',
               value: state.chi.toFixed(1),
-              sublabel: 'N/T (⟨m²⟩ - ⟨|m|⟩²)',
+              sublabel: 'N/T (⟨m²⟩ - ⟨m⟩²), smoothed',
               tint: '#34d399',
             }),
           ),

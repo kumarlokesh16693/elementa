@@ -33,6 +33,7 @@ export const crystalStore = reactive({
   millerL: 0,
   showPlane: true,
   autoRotate: true,
+  fx: false,
   xraySourceId: 'Cu-Ka',
   crystalliteSizeNm: 35,
   activeTab: 'unitcell' as 'unitcell' | 'diffractometer' | 'bravais',
@@ -380,6 +381,14 @@ export function CrystallographyWorkbench(): VNode {
                       crystalStore.autoRotate ? 'border-amber-400/40 bg-amber-400/10 text-amber-300 font-bold' : 'border-white/10 text-zinc-400'
                     }`,
                   }, crystalStore.autoRotate ? 'Spin: ON' : 'Spin: OFF'),
+                  H('button', {
+                    type: 'button',
+                    onClick: () => { crystalStore.fx = !crystalStore.fx },
+                    onclick: () => { crystalStore.fx = !crystalStore.fx },
+                    class: `cursor-pointer rounded border px-2 py-0.5 text-[9px] font-mono transition ${
+                      crystalStore.fx ? 'border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300 font-bold' : 'border-white/10 text-zinc-400'
+                    }`,
+                  }, crystalStore.fx ? 'Glow FX: ON' : 'Glow FX: OFF'),
                 ),
               ),
 
@@ -395,6 +404,7 @@ export function CrystallographyWorkbench(): VNode {
                   'data-show-plane': String(crystalStore.showPlane),
                   'data-rotate': String(crystalStore.autoRotate),
                   'data-speed': '1',
+                  'data-fx': crystalStore.fx ? 'on' : 'off',
                   class: 'h-full w-full',
                 }),
                 H('div', { class: 'pointer-events-none absolute bottom-1.5 left-1.5 flex items-center gap-2 font-mono text-[8.5px] text-zinc-500 bg-black/60 px-2 py-0.5 rounded backdrop-blur' },
