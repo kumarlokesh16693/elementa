@@ -648,9 +648,10 @@ export class ElementaQuantumWaveElement extends HTMLElement {
     for (let c = 0; c < COLS; c++) {
       const v = g.v[c * STRIDE]
       if (v < vMin) vMin = v
-      if (v > maxV && Number.isFinite(v)) maxV = v
+      if (v > vMax && Number.isFinite(v)) vMax = v
     }
     if (!Number.isFinite(vMin)) vMin = 0
+    if (!Number.isFinite(vMax)) vMax = 1
     let yMax = 0
     if (this.system === 'ho') {
       yMax = Math.max(1.1 * this.kappa * Math.min(6, 4), (this.eigenE[EIGEN_LEVELS - 1] || 1) * 1.3)
